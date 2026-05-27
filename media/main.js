@@ -111,7 +111,7 @@
 			const input = document.createElement('input');
 			input.type = 'checkbox';
 			input.value = name;
-			input.addEventListener('change', onQubitOrLocationChanged);
+			input.addEventListener('change', onQubitSelectionChanged);
 			label.appendChild(input);
 			label.appendChild(document.createTextNode(name));
 			qubitListEl.appendChild(label);
@@ -153,6 +153,7 @@
 	}
 
 	function updateOperations() {
+		const previous = operationEl.value;
 		if (isQubitPropertyCategory()) {
 			fillSelect(operationEl, [], '—');
 			return;
@@ -165,9 +166,13 @@
 			ops.map((o) => ({ value: o, label: o })),
 			'Select operation'
 		);
+		if (previous && ops.includes(previous)) {
+			operationEl.value = previous;
+		}
 	}
 
 	function updateParameters() {
+		const previous = parameterEl.value;
 		const selectedQubits = getSelectedQubits();
 		let entries = entriesForSelection(selectedQubits);
 
@@ -185,9 +190,25 @@
 			entries.map((e) => ({ value: e.key, label: e.parameter })),
 			'Select parameter'
 		);
+		if (previous && entries.some((e) => e.key === previous)) {
+			parameterEl.value = previous;
+		}
+	}
+
+	function readPendingNewValues() {
+		/** @type {Map<string, string>} */
+		const pending = new Map();
+		for (const el of valueBody.querySelectorAll('input[data-qubit]')) {
+			const input = /** @type {HTMLInputElement} */ (el);
+			if (input.dataset.qubit) {
+				pending.set(input.dataset.qubit, input.value);
+			}
+		}
+		return pending;
 	}
 
 	function renderValueTable() {
+		const pendingNewValues = readPendingNewValues();
 		valueBody.innerHTML = '';
 		const selectedQubits = getSelectedQubits();
 		const entry = getSelectedEntry();
@@ -220,6 +241,9 @@
 				input.type = 'text';
 				input.dataset.qubit = qubit;
 				input.placeholder = 'leave blank to skip';
+				if (pendingNewValues.has(qubit)) {
+					input.value = pendingNewValues.get(qubit) ?? '';
+				}
 				tdNew.appendChild(input);
 				tr.appendChild(tdCurrent);
 				tr.appendChild(tdNew);
@@ -239,12 +263,21 @@
 		}
 	}
 
-	function onQubitOrLocationChanged() {
+	function refreshParameterUi() {
 		syncLocationSection();
-		updateCategories();
 		updateOperations();
 		updateParameters();
 		renderValueTable();
+	}
+
+	function onQubitSelectionChanged() {
+		updateCategories();
+		refreshParameterUi();
+	}
+
+	function onQubitOrLocationChanged() {
+		updateCategories();
+		refreshParameterUi();
 	}
 
 	function onCategoryChanged() {
