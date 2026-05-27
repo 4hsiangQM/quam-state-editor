@@ -55,6 +55,15 @@ function scanNumericParameters(qubitName: string, qubit: unknown): NumericParame
 	return results.sort((a, b) => a.label.localeCompare(b.label));
 }
 
+function parseFiniteNumber(input: string): number | undefined {
+	const trimmed = input.trim();
+	if (trimmed === '') {
+		return undefined;
+	}
+	const n = Number(trimmed);
+	return Number.isFinite(n) ? n : undefined;
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "quam-state-editor" is now active!');
 
@@ -110,8 +119,26 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
+		const pathLabel = selected.path.join('.');
+		const input = await vscode.window.showInputBox({
+			title: 'Edit parameter',
+			prompt: pathLabel,
+			value: String(selected.value),
+			validateInput: (text) =>
+				parseFiniteNumber(text) === undefined ? 'Enter a finite number.' : undefined,
+		});
+		if (input === undefined) {
+			return;
+		}
+
+		const newValue = parseFiniteNumber(input);
+		if (newValue === undefined) {
+			vscode.window.showErrorMessage('Enter a finite number.');
+			return;
+		}
+
 		vscode.window.showInformationMessage(
-			`path: ${JSON.stringify(selected.path)}  value: ${selected.value}`
+			`Would update ${pathLabel} from ${selected.value} to ${newValue}`
 		);
 	});
 
