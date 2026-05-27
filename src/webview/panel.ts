@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
 import { applyParameterEdits } from '../apply.js';
-import { buildParameterCatalog, type ParameterCatalog } from '../catalog.js';
+import {
+	buildParameterCatalog,
+	QUBIT_PROPERTY_CATEGORY,
+	QUBIT_PROPERTY_CATEGORY_LABEL,
+	type ParameterCatalog,
+} from '../catalog.js';
 import {
 	getStateBackupUri,
 	getStateFileUri,
@@ -22,7 +27,12 @@ export class QuamStateEditorPanel {
 
 	private data: StateJson = {};
 	private rawBytes: Uint8Array = new Uint8Array();
-	private catalog: ParameterCatalog = { qubits: [], entries: [] };
+	private catalog: ParameterCatalog = {
+		qubits: [],
+		entries: [],
+		qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
+		qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
+	};
 
 	private constructor(
 		panel: vscode.WebviewPanel,
@@ -88,7 +98,12 @@ export class QuamStateEditorPanel {
 
 			if (!this.data.qubits || typeof this.data.qubits !== 'object') {
 				this.postMessage({ type: 'status', message: 'state.json has no "qubits" object.', level: 'error' });
-				this.catalog = { qubits: [], entries: [] };
+				this.catalog = {
+					qubits: [],
+					entries: [],
+					qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
+					qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
+				};
 				this.postMessage({ type: 'catalog', payload: this.catalog });
 				return;
 			}
@@ -184,7 +199,7 @@ export class QuamStateEditorPanel {
 		<select id="category" disabled><option value="">—</option></select>
 	</section>
 
-	<section class="field">
+	<section class="field" id="location-section">
 		<span class="label">Location</span>
 		<div class="radio-row">
 			<label><input type="radio" name="location" value="direct" checked /> On category</label>

@@ -2,19 +2,30 @@
 (function () {
 	const vscode = acquireVsCodeApi();
 
-	/** @type {{ qubits: string[], entries: Array<{
-	 *   key: string,
-	 *   kind: 'direct' | 'operation',
-	 *   category: string,
-	 *   operation?: string,
-	 *   parameter: string,
-	 *   byQubit: Record<string, { path: string[], value: number } | null>
-	 * }> }} */
-	let catalog = { qubits: [], entries: [] };
+	/** @type {{
+	 *   qubits: string[],
+	 *   entries: Array<{
+	 *     key: string,
+	 *     kind: 'direct' | 'operation' | 'qubitProperty',
+	 *     category: string,
+	 *     operation?: string,
+	 *     parameter: string,
+	 *     byQubit: Record<string, { path: string[], value: number } | null>
+	 *   }>,
+	 *   qubitPropertyCategory: string,
+	 *   qubitPropertyCategoryLabel: string
+	 * }} */
+	let catalog = {
+		qubits: [],
+		entries: [],
+		qubitPropertyCategory: '__qubit_property__',
+		qubitPropertyCategoryLabel: 'Qubit property',
+	};
 
 	const statusEl = document.getElementById('status');
 	const qubitListEl = document.getElementById('qubit-list');
 	const categoryEl = /** @type {HTMLSelectElement} */ (document.getElementById('category'));
+	const locationSection = document.getElementById('location-section');
 	const operationSection = document.getElementById('operation-section');
 	const operationEl = /** @type {HTMLSelectElement} */ (document.getElementById('operation'));
 	const parameterEl = /** @type {HTMLSelectElement} */ (document.getElementById('parameter'));
@@ -31,6 +42,10 @@
 		return [...qubitListEl.querySelectorAll('input[type=checkbox]:checked')].map(
 			(el) => /** @type {HTMLInputElement} */ (el).value
 		);
+	}
+
+	function isQubitPropertyCategory() {
+		return categoryEl.value === catalog.qubitPropertyCategory;
 	}
 
 	function getLocationKind() {
@@ -53,10 +68,21 @@
 		}
 
 		const category = categoryEl.value;
-		const kind = getLocationKind();
+		if (!category) {
+			return [];
+		}
 
+		if (isQubitPropertyCategory()) {
+			return catalog.entries.filter(
+				(entry) =>
+					entry.kind === 'qubitProperty' &&
+					selectedQubits.every((q) => entry.byQubit[q])
+			);
+		}
+
+		const kind = getLocationKind();
 		return catalog.entries.filter((entry) => {
-			if (entry.category !== category || entry.kind !== kind) {
+			if (entry.kind === 'qubitProperty' || entry.category !== category || entry.kind !== kind) {
 				return false;
 			}
 			return selectedQubits.every((q) => entry.byQubit[q]);
@@ -96,24 +122,41 @@
 		const selectedQubits = getSelectedQubits();
 		const previous = categoryEl.value;
 		const categories = new Set();
+		let hasQubitProperty = false;
+
 		for (const entry of catalog.entries) {
-			if (selectedQubits.length === 0 || selectedQubits.every((q) => entry.byQubit[q])) {
+			if (selectedQubits.length > 0 && !selectedQubits.every((q) => entry.byQubit[q])) {
+				continue;
+			}
+			if (entry.kind === 'qubitProperty') {
+				hasQubitProperty = true;
+			} else {
 				categories.add(entry.category);
 			}
 		}
-		const sorted = [...categories].sort();
-		fillSelect(
-			categoryEl,
-			sorted.map((c) => ({ value: c, label: c })),
-			'Select category'
-		);
-		categoryEl.disabled = selectedQubits.length === 0 || sorted.length === 0;
-		if (previous && sorted.includes(previous)) {
+
+		/** @type {Array<{ value: string, label: string }>} */
+		const options = [...categories].sort().map((c) => ({ value: c, label: c }));
+		if (hasQubitProperty) {
+			options.push({
+				value: catalog.qubitPropertyCategory,
+				label: catalog.qubitPropertyCategoryLabel,
+			});
+			options.sort((a, b) => a.label.localeCompare(b.label));
+		}
+
+		fillSelect(categoryEl, options, 'Select category');
+		categoryEl.disabled = selectedQubits.length === 0 || options.length === 0;
+		if (previous && options.some((o) => o.value === previous)) {
 			categoryEl.value = previous;
 		}
 	}
 
 	function updateOperations() {
+		if (isQubitPropertyCategory()) {
+			fillSelect(operationEl, [], '—');
+			return;
+		}
 		const selectedQubits = getSelectedQubits();
 		const entries = entriesForSelection(selectedQubits).filter((e) => e.kind === 'operation');
 		const ops = [...new Set(entries.map((e) => e.operation).filter(Boolean))].sort();
@@ -128,7 +171,7 @@
 		const selectedQubits = getSelectedQubits();
 		let entries = entriesForSelection(selectedQubits);
 
-		if (getLocationKind() === 'operation') {
+		if (!isQubitPropertyCategory() && getLocationKind() === 'operation') {
 			const op = operationEl.value;
 			if (!op) {
 				fillSelect(parameterEl, [], 'Select operation first');
@@ -187,8 +230,13 @@
 	}
 
 	function syncLocationSection() {
-		const kind = getLocationKind();
-		operationSection.classList.toggle('hidden', kind !== 'operation');
+		const isProperty = isQubitPropertyCategory();
+		locationSection.classList.toggle('hidden', isProperty);
+		if (isProperty) {
+			operationSection.classList.add('hidden');
+		} else {
+			operationSection.classList.toggle('hidden', getLocationKind() !== 'operation');
+		}
 	}
 
 	function onQubitOrLocationChanged() {
@@ -200,6 +248,8 @@
 	}
 
 	function onCategoryChanged() {
+		parameterEl.value = '';
+		syncLocationSection();
 		updateOperations();
 		updateParameters();
 		renderValueTable();

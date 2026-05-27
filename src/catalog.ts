@@ -2,7 +2,7 @@ import type { StateJson } from './stateFile.js';
 import type { NumericParameter } from './parameterIndex.js';
 import { scanNumericParameters } from './parameterIndex.js';
 
-export type ParameterKind = 'direct' | 'operation';
+export type ParameterKind = 'direct' | 'operation' | 'qubitProperty';
 
 export interface ClassifiedParameter {
 	kind: ParameterKind;
@@ -23,12 +23,27 @@ export interface CatalogEntry {
 export interface ParameterCatalog {
 	qubits: string[];
 	entries: CatalogEntry[];
+	/** Category dropdown value for qubit-level properties (display: qubitPropertyCategoryLabel). */
+	qubitPropertyCategory: string;
+	qubitPropertyCategoryLabel: string;
 }
 
-/** Classify a scanned path into direct (under category) or operation (under operations/). */
+/** Internal category id for qubit-root numeric fields (anharmonicity, T1, …). */
+export const QUBIT_PROPERTY_CATEGORY = '__qubit_property__';
+export const QUBIT_PROPERTY_CATEGORY_LABEL = 'Qubit property';
+
+/** Classify a scanned path into qubit property, direct (under category), or operation. */
 export function classifyParameterPath(path: string[]): ClassifiedParameter | null {
-	if (path.length < 4 || path[0] !== 'qubits') {
+	if (path.length < 3 || path[0] !== 'qubits') {
 		return null;
+	}
+
+	if (path.length === 3) {
+		return {
+			kind: 'qubitProperty',
+			category: QUBIT_PROPERTY_CATEGORY,
+			parameter: path[2],
+		};
 	}
 
 	const category = path[2];
@@ -57,6 +72,9 @@ export function classifyParameterPath(path: string[]): ClassifiedParameter | nul
 }
 
 function entryKey(classified: ClassifiedParameter): string {
+	if (classified.kind === 'qubitProperty') {
+		return `qubitProperty|${classified.parameter}`;
+	}
 	if (classified.kind === 'operation') {
 		return `operation|${classified.category}|${classified.operation}|${classified.parameter}`;
 	}
@@ -92,7 +110,12 @@ function mergeParameter(
 
 export function buildParameterCatalog(data: StateJson): ParameterCatalog {
 	if (!data.qubits || typeof data.qubits !== 'object') {
-		return { qubits: [], entries: [] };
+		return {
+			qubits: [],
+			entries: [],
+			qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
+			qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
+		};
 	}
 
 	const qubitNames = Object.keys(data.qubits).sort();
@@ -106,6 +129,15 @@ export function buildParameterCatalog(data: StateJson): ParameterCatalog {
 	}
 
 	const sortedEntries = [...entries.values()].sort((a, b) => {
+		if (a.kind === 'qubitProperty' && b.kind !== 'qubitProperty') {
+			return -1;
+		}
+		if (b.kind === 'qubitProperty' && a.kind !== 'qubitProperty') {
+			return 1;
+		}
+		if (a.kind === 'qubitProperty' && b.kind === 'qubitProperty') {
+			return a.parameter.localeCompare(b.parameter);
+		}
 		const cat = a.category.localeCompare(b.category);
 		if (cat !== 0) {
 			return cat;
@@ -122,5 +154,10 @@ export function buildParameterCatalog(data: StateJson): ParameterCatalog {
 		return a.parameter.localeCompare(b.parameter);
 	});
 
-	return { qubits: qubitNames, entries: sortedEntries };
+	return {
+		qubits: qubitNames,
+		entries: sortedEntries,
+		qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
+		qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
+	};
 }
