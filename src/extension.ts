@@ -137,9 +137,16 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		vscode.window.showInformationMessage(
-			`Would update ${pathLabel} from ${selected.value} to ${newValue}`
+		const choice = await vscode.window.showWarningMessage(
+			`Update ${pathLabel} from ${selected.value} to ${newValue}?`,
+			'Apply',
+			'Cancel'
 		);
+		if (choice !== 'Apply') {
+			return;
+		}
+
+		vscode.window.showInformationMessage('Applied preview only');
 	});
 
 	context.subscriptions.push(disposable);
