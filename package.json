@@ -1,5 +1,6 @@
 {
   "name": "quam-state-editor",
+  "publisher": "jackchao",
   "displayName": "QuAM State Editor",
   "description": "Edit calibration parameters in state.json",
   "version": "0.0.1",
