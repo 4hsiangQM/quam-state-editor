@@ -1,5 +1,10 @@
 export interface NumericParameter {
+	/** Relative path under the qubit (QuickPick label). */
 	label: string;
+	/** Current numeric value (QuickPick description). */
+	description: string;
+	/** Full JSON path (QuickPick detail). */
+	detail: string;
 	path: string[];
 	value: number;
 }
@@ -23,10 +28,13 @@ export function scanNumericParameters(qubitName: string, qubit: unknown): Numeri
 
 	function visit(node: unknown, pathFromQubit: string[]): void {
 		if (typeof node === 'number') {
+			const path = [...basePath, ...pathFromQubit];
 			const relative = pathFromQubit.join('.');
 			results.push({
-				label: `${relative} = ${node}`,
-				path: [...basePath, ...pathFromQubit],
+				label: relative,
+				description: String(node),
+				detail: `/${path.join('/')}`,
+				path,
 				value: node,
 			});
 			return;
