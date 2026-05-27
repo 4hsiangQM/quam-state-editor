@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 /** Minimal shape we need from state.json */
 interface StateJson {
 	qubits?: Record<string, unknown>;
+	[key: string]: unknown;
 }
 
 interface NumericParameter {
@@ -55,6 +56,40 @@ function scanNumericParameters(qubitName: string, qubit: unknown): NumericParame
 	return results.sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/**
+ * Set a numeric leaf at path (e.g. ["qubits", "q1", "xy", "amplitude"]).
+ * Throws if the path is invalid or the existing value is not a number.
+ */
+function setValueAtPath(root: unknown, path: string[], newValue: number): void {
+	if (path.length === 0) {
+		throw new Error('Path must not be empty.');
+	}
+
+	let current: unknown = root;
+	for (let i = 0; i < path.length - 1; i++) {
+		const key = path[i];
+		if (current === null || typeof current !== 'object' || Array.isArray(current)) {
+			throw new Error(`Invalid path segment "${key}".`);
+		}
+		current = (current as Record<string, unknown>)[key];
+	}
+
+	const lastKey = path[path.length - 1];
+	if (current === null || typeof current !== 'object' || Array.isArray(current)) {
+		throw new Error(`Invalid path segment "${lastKey}".`);
+	}
+
+	const parent = current as Record<string, unknown>;
+	const existing = parent[lastKey];
+	if (typeof existing !== 'number') {
+		throw new Error(
+			`Only numeric fields can be updated (expected number at "${lastKey}", found ${typeof existing}).`
+		);
+	}
+
+	parent[lastKey] = newValue;
+}
+
 function parseFiniteNumber(input: string): number | undefined {
 	const trimmed = input.trim();
 	if (trimmed === '') {
@@ -77,9 +112,10 @@ export function activate(context: vscode.ExtensionContext) {
 		const stateUri = vscode.Uri.joinPath(folder.uri, 'quam_state', 'state.json');
 
 		let data: StateJson;
+		let fileBytes: Uint8Array;
 		try {
-			const bytes = await vscode.workspace.fs.readFile(stateUri);
-			const text = new TextDecoder().decode(bytes);
+			fileBytes = await vscode.workspace.fs.readFile(stateUri);
+			const text = new TextDecoder().decode(fileBytes);
 			data = JSON.parse(text) as StateJson;
 		} catch (err) {
 			vscode.window.showErrorMessage(
@@ -146,7 +182,18 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		vscode.window.showInformationMessage('Applied preview only');
+		const backupUri = vscode.Uri.joinPath(folder.uri, 'quam_state', 'state.json.bak');
+		try {
+			await vscode.workspace.fs.writeFile(backupUri, fileBytes);
+			setValueAtPath(data, selected.path, newValue);
+			const output = new TextEncoder().encode(JSON.stringify(data, null, 2));
+			await vscode.workspace.fs.writeFile(stateUri, output);
+			vscode.window.showInformationMessage(`Updated ${pathLabel}`);
+		} catch (err) {
+			vscode.window.showErrorMessage(
+				`Failed to update state.json: ${err instanceof Error ? err.message : String(err)}`
+			);
+		}
 	});
 
 	context.subscriptions.push(disposable);
