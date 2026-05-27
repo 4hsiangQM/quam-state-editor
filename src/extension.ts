@@ -106,7 +106,13 @@ export function activate(context: vscode.ExtensionContext) {
 			await writeStateBackup(backupUri, rawBytes);
 			setValueAtPath(data, selected.path, newValue);
 			await writeStateFile(stateUri, data);
-			vscode.window.showInformationMessage(`Updated ${pathLabel}`);
+			const action = await vscode.window.showInformationMessage(
+				`Updated ${pathLabel}`,
+				'Open state.json'
+			);
+			if (action === 'Open state.json') {
+				await vscode.window.showTextDocument(stateUri);
+			}
 		} catch (err) {
 			vscode.window.showErrorMessage(
 				`Failed to update state.json: ${err instanceof Error ? err.message : String(err)}`
