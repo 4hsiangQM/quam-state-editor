@@ -14,7 +14,12 @@
     "commands": [
       {
         "command": "quam-state-editor.open",
-        "title": "Open",
+        "title": "Open Panel",
+        "category": "QuAM State Editor"
+      },
+      {
+        "command": "quam-state-editor.openQuickPick",
+        "title": "Open (Quick Pick)",
         "category": "QuAM State Editor"
       }
     ]

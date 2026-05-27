@@ -1,0 +1,146 @@
+* {
+	box-sizing: border-box;
+}
+
+body {
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size);
+	color: var(--vscode-foreground);
+	background: var(--vscode-editor-background);
+	margin: 0;
+	padding: 16px 20px 24px;
+	max-width: 720px;
+}
+
+h1 {
+	font-size: 1.1em;
+	font-weight: 600;
+	margin: 0 0 4px;
+}
+
+.status {
+	margin: 0 0 16px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.9em;
+}
+
+.status.error {
+	color: var(--vscode-errorForeground);
+}
+
+.field {
+	margin-bottom: 14px;
+}
+
+.field.hidden {
+	display: none;
+}
+
+label,
+.label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 6px;
+}
+
+.hint {
+	margin: 0 0 8px;
+	font-size: 0.85em;
+	color: var(--vscode-descriptionForeground);
+}
+
+select {
+	width: 100%;
+	max-width: 480px;
+	padding: 4px 8px;
+	background: var(--vscode-dropdown-background);
+	color: var(--vscode-dropdown-foreground);
+	border: 1px solid var(--vscode-dropdown-border);
+}
+
+.qubit-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 16px;
+}
+
+.qubit-list label {
+	font-weight: normal;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+}
+
+.radio-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px 20px;
+}
+
+.radio-row label {
+	font-weight: normal;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+}
+
+.value-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9em;
+}
+
+.value-table th,
+.value-table td {
+	border: 1px solid var(--vscode-widget-border);
+	padding: 6px 8px;
+	text-align: left;
+}
+
+.value-table th {
+	background: var(--vscode-editor-inactiveSelectionBackground);
+}
+
+.value-table input {
+	width: 100%;
+	min-width: 120px;
+	padding: 4px 6px;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border);
+}
+
+.value-table input:disabled {
+	opacity: 0.6;
+}
+
+.value-table .missing {
+	color: var(--vscode-errorForeground);
+	font-style: italic;
+}
+
+.actions {
+	display: flex;
+	gap: 10px;
+	margin-top: 16px;
+}
+
+button {
+	padding: 6px 14px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border: none;
+	cursor: pointer;
+}
+
+button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+button.secondary {
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+}

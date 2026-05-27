@@ -1,0 +1,293 @@
+// @ts-check
+(function () {
+	const vscode = acquireVsCodeApi();
+
+	/** @type {{ qubits: string[], entries: Array<{
+	 *   key: string,
+	 *   kind: 'direct' | 'operation',
+	 *   category: string,
+	 *   operation?: string,
+	 *   parameter: string,
+	 *   byQubit: Record<string, { path: string[], value: number } | null>
+	 * }> }} */
+	let catalog = { qubits: [], entries: [] };
+
+	const statusEl = document.getElementById('status');
+	const qubitListEl = document.getElementById('qubit-list');
+	const categoryEl = /** @type {HTMLSelectElement} */ (document.getElementById('category'));
+	const operationSection = document.getElementById('operation-section');
+	const operationEl = /** @type {HTMLSelectElement} */ (document.getElementById('operation'));
+	const parameterEl = /** @type {HTMLSelectElement} */ (document.getElementById('parameter'));
+	const valueBody = document.getElementById('value-body');
+	const applyBtn = /** @type {HTMLButtonElement} */ (document.getElementById('apply'));
+	const reloadBtn = /** @type {HTMLButtonElement} */ (document.getElementById('reload'));
+
+	function setStatus(text, isError) {
+		statusEl.textContent = text;
+		statusEl.classList.toggle('error', !!isError);
+	}
+
+	function getSelectedQubits() {
+		return [...qubitListEl.querySelectorAll('input[type=checkbox]:checked')].map(
+			(el) => /** @type {HTMLInputElement} */ (el).value
+		);
+	}
+
+	function getLocationKind() {
+		const checked = document.querySelector('input[name=location]:checked');
+		return checked ? /** @type {HTMLInputElement} */ (checked).value : 'direct';
+	}
+
+	function getSelectedEntry() {
+		const key = parameterEl.value;
+		if (!key) {
+			return undefined;
+		}
+		return catalog.entries.find((e) => e.key === key);
+	}
+
+	/** @param {string[]} selectedQubits */
+	function entriesForSelection(selectedQubits) {
+		if (selectedQubits.length === 0) {
+			return [];
+		}
+
+		const category = categoryEl.value;
+		const kind = getLocationKind();
+
+		return catalog.entries.filter((entry) => {
+			if (entry.category !== category || entry.kind !== kind) {
+				return false;
+			}
+			return selectedQubits.every((q) => entry.byQubit[q]);
+		});
+	}
+
+	function fillSelect(select, options, placeholder) {
+		select.innerHTML = '';
+		const first = document.createElement('option');
+		first.value = '';
+		first.textContent = placeholder;
+		select.appendChild(first);
+		for (const opt of options) {
+			const o = document.createElement('option');
+			o.value = opt.value;
+			o.textContent = opt.label;
+			select.appendChild(o);
+		}
+		select.disabled = options.length === 0;
+	}
+
+	function renderQubits() {
+		qubitListEl.innerHTML = '';
+		for (const name of catalog.qubits) {
+			const label = document.createElement('label');
+			const input = document.createElement('input');
+			input.type = 'checkbox';
+			input.value = name;
+			input.addEventListener('change', onQubitOrLocationChanged);
+			label.appendChild(input);
+			label.appendChild(document.createTextNode(name));
+			qubitListEl.appendChild(label);
+		}
+	}
+
+	function updateCategories() {
+		const selectedQubits = getSelectedQubits();
+		const previous = categoryEl.value;
+		const categories = new Set();
+		for (const entry of catalog.entries) {
+			if (selectedQubits.length === 0 || selectedQubits.every((q) => entry.byQubit[q])) {
+				categories.add(entry.category);
+			}
+		}
+		const sorted = [...categories].sort();
+		fillSelect(
+			categoryEl,
+			sorted.map((c) => ({ value: c, label: c })),
+			'Select category'
+		);
+		categoryEl.disabled = selectedQubits.length === 0 || sorted.length === 0;
+		if (previous && sorted.includes(previous)) {
+			categoryEl.value = previous;
+		}
+	}
+
+	function updateOperations() {
+		const selectedQubits = getSelectedQubits();
+		const entries = entriesForSelection(selectedQubits).filter((e) => e.kind === 'operation');
+		const ops = [...new Set(entries.map((e) => e.operation).filter(Boolean))].sort();
+		fillSelect(
+			operationEl,
+			ops.map((o) => ({ value: o, label: o })),
+			'Select operation'
+		);
+	}
+
+	function updateParameters() {
+		const selectedQubits = getSelectedQubits();
+		let entries = entriesForSelection(selectedQubits);
+
+		if (getLocationKind() === 'operation') {
+			const op = operationEl.value;
+			if (!op) {
+				fillSelect(parameterEl, [], 'Select operation first');
+				return;
+			}
+			entries = entries.filter((e) => e.operation === op);
+		}
+
+		fillSelect(
+			parameterEl,
+			entries.map((e) => ({ value: e.key, label: e.parameter })),
+			'Select parameter'
+		);
+	}
+
+	function renderValueTable() {
+		valueBody.innerHTML = '';
+		const selectedQubits = getSelectedQubits();
+		const entry = getSelectedEntry();
+
+		applyBtn.disabled = !entry || selectedQubits.length === 0;
+
+		if (!entry || selectedQubits.length === 0) {
+			return;
+		}
+
+		for (const qubit of selectedQubits) {
+			const tr = document.createElement('tr');
+			const slot = entry.byQubit[qubit];
+
+			const tdQ = document.createElement('td');
+			tdQ.textContent = qubit;
+			tr.appendChild(tdQ);
+
+			const tdCurrent = document.createElement('td');
+			const tdNew = document.createElement('td');
+
+			if (!slot) {
+				tdCurrent.colSpan = 2;
+				tdCurrent.className = 'missing';
+				tdCurrent.textContent = 'Not available for this qubit';
+				tr.appendChild(tdCurrent);
+			} else {
+				tdCurrent.textContent = String(slot.value);
+				const input = document.createElement('input');
+				input.type = 'text';
+				input.dataset.qubit = qubit;
+				input.placeholder = 'leave blank to skip';
+				tdNew.appendChild(input);
+				tr.appendChild(tdCurrent);
+				tr.appendChild(tdNew);
+			}
+
+			valueBody.appendChild(tr);
+		}
+	}
+
+	function syncLocationSection() {
+		const kind = getLocationKind();
+		operationSection.classList.toggle('hidden', kind !== 'operation');
+	}
+
+	function onQubitOrLocationChanged() {
+		syncLocationSection();
+		updateCategories();
+		updateOperations();
+		updateParameters();
+		renderValueTable();
+	}
+
+	function onCategoryChanged() {
+		updateOperations();
+		updateParameters();
+		renderValueTable();
+	}
+
+	function onOperationChanged() {
+		updateParameters();
+		renderValueTable();
+	}
+
+	function onCatalog(payload) {
+		catalog = payload;
+		renderQubits();
+		setStatus(
+			catalog.qubits.length === 0
+				? 'No qubits in state.json.'
+				: `Loaded ${catalog.qubits.length} qubit(s), ${catalog.entries.length} parameter(s).`
+		);
+		onQubitOrLocationChanged();
+	}
+
+	applyBtn.addEventListener('click', () => {
+		const entry = getSelectedEntry();
+		if (!entry) {
+			return;
+		}
+
+		/** @type {Array<{ qubit: string, path: string[], newValue: string }>} */
+		const edits = [];
+		const inputs = valueBody.querySelectorAll('input[data-qubit]');
+		for (const el of inputs) {
+			const input = /** @type {HTMLInputElement} */ (el);
+			const qubit = input.dataset.qubit;
+			const slot = entry.byQubit[qubit];
+			if (!slot) {
+				continue;
+			}
+			edits.push({
+				qubit,
+				path: slot.path,
+				newValue: input.value,
+			});
+		}
+
+		vscode.postMessage({ type: 'apply', entryKey: entry.key, edits });
+	});
+
+	reloadBtn.addEventListener('click', () => {
+		setStatus('Reloading…');
+		vscode.postMessage({ type: 'reload' });
+	});
+
+	document.querySelectorAll('input[name=location]').forEach((el) => {
+		el.addEventListener('change', onQubitOrLocationChanged);
+	});
+	categoryEl.addEventListener('change', onCategoryChanged);
+	operationEl.addEventListener('change', onOperationChanged);
+	parameterEl.addEventListener('change', renderValueTable);
+
+	window.addEventListener('message', (event) => {
+		const message = event.data;
+		switch (message.type) {
+			case 'catalog':
+				onCatalog(message.payload);
+				break;
+			case 'applyResult':
+				if (message.ok) {
+					setStatus(
+						message.updatedLabels
+							? `Applied: ${message.updatedLabels.join('; ')}`
+							: 'Applied.'
+					);
+					renderValueTable();
+				} else {
+					let text = message.message || 'Apply failed.';
+					if (message.errors?.length) {
+						text +=
+							' ' +
+							message.errors.map((e) => `${e.qubit}: ${e.error}`).join('; ');
+					}
+					setStatus(text, true);
+				}
+				break;
+			case 'status':
+				setStatus(message.message, message.level === 'error');
+				break;
+		}
+	});
+
+	vscode.postMessage({ type: 'ready' });
+})();
