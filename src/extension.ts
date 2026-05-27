@@ -5,6 +5,56 @@ interface StateJson {
 	qubits?: Record<string, unknown>;
 }
 
+interface NumericParameter {
+	label: string;
+	path: string[];
+	value: number;
+}
+
+const IGNORED_KEYS = new Set([
+	'__class__',
+	'id',
+	'macros',
+	'core',
+	'opx_input',
+	'opx_output',
+]);
+
+/**
+ * Recursively collect numeric leaf values under one qubit object.
+ * Paths are rooted at ["qubits", qubitName, ...].
+ */
+function scanNumericParameters(qubitName: string, qubit: unknown): NumericParameter[] {
+	const results: NumericParameter[] = [];
+	const basePath = ['qubits', qubitName];
+
+	function visit(node: unknown, pathFromQubit: string[]): void {
+		if (typeof node === 'number') {
+			const relative = pathFromQubit.join('.');
+			results.push({
+				label: `${relative} = ${node}`,
+				path: [...basePath, ...pathFromQubit],
+				value: node,
+			});
+			return;
+		}
+
+		if (node === null || typeof node !== 'object' || Array.isArray(node)) {
+			return;
+		}
+
+		for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+			if (IGNORED_KEYS.has(key)) {
+				continue;
+			}
+			visit(value, [...pathFromQubit, key]);
+		}
+	}
+
+	visit(qubit, []);
+	return results.sort((a, b) => a.label.localeCompare(b.label));
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "quam-state-editor" is now active!');
 
@@ -40,13 +90,29 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		const selected = await vscode.window.showQuickPick(qubitNames, {
+		const qubitName = await vscode.window.showQuickPick(qubitNames, {
 			placeHolder: 'Select a qubit',
 		});
-
-		if (selected !== undefined) {
-			vscode.window.showInformationMessage(`Selected qubit: ${selected}`);
+		if (qubitName === undefined) {
+			return;
 		}
+
+		const parameters = scanNumericParameters(qubitName, data.qubits[qubitName]);
+		if (parameters.length === 0) {
+			vscode.window.showWarningMessage(`No numeric parameters found for qubit "${qubitName}".`);
+			return;
+		}
+
+		const selected = await vscode.window.showQuickPick(parameters, {
+			placeHolder: 'Select a parameter',
+		});
+		if (selected === undefined) {
+			return;
+		}
+
+		vscode.window.showInformationMessage(
+			`path: ${JSON.stringify(selected.path)}  value: ${selected.value}`
+		);
 	});
 
 	context.subscriptions.push(disposable);
