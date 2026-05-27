@@ -28,6 +28,13 @@ h1 {
 	color: var(--vscode-errorForeground);
 }
 
+.state-file {
+	margin: 0 0 12px;
+	font-size: 0.85em;
+	color: var(--vscode-descriptionForeground);
+	word-break: break-all;
+}
+
 .field {
 	margin-bottom: 14px;
 }

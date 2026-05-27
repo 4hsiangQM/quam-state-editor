@@ -3,16 +3,36 @@ import { applyParameterEdits } from './apply.js';
 import { buildParameterCatalog } from './catalog.js';
 import { scanNumericParameters } from './parameterIndex.js';
 import {
-	getStateBackupUri,
-	getStateFileUri,
+	getBackupUriForStateFile,
+	promptSelectStateFileUri,
 	readStateFile,
+	resolveStateFileUri,
 } from './stateFile.js';
 import { parseFiniteNumber } from './validation.js';
 import { QuamStateEditorPanel } from './webview/panel.js';
 
-async function runQuickPickFlow(folder: vscode.WorkspaceFolder): Promise<void> {
-	const stateUri = getStateFileUri(folder);
-	const backupUri = getStateBackupUri(folder);
+async function openWithStateFile(
+	context: vscode.ExtensionContext,
+	folder: vscode.WorkspaceFolder,
+	openPanel: boolean
+): Promise<void> {
+	const stateUri = await resolveStateFileUri(context, folder);
+	if (!stateUri) {
+		return;
+	}
+
+	if (openPanel) {
+		await QuamStateEditorPanel.createOrShow(context.extensionUri, folder, stateUri);
+	} else {
+		await runQuickPickFlow(folder, stateUri);
+	}
+}
+
+async function runQuickPickFlow(
+	folder: vscode.WorkspaceFolder,
+	stateUri: vscode.Uri
+): Promise<void> {
+	const backupUri = getBackupUriForStateFile(stateUri);
 
 	let data;
 	let rawBytes: Uint8Array;
@@ -22,7 +42,7 @@ async function runQuickPickFlow(folder: vscode.WorkspaceFolder): Promise<void> {
 		rawBytes = read.rawBytes;
 	} catch (err) {
 		vscode.window.showErrorMessage(
-			`Could not read quam_state/state.json: ${err instanceof Error ? err.message : String(err)}`
+			`Could not read state.json: ${err instanceof Error ? err.message : String(err)}`
 		);
 		return;
 	}
@@ -100,9 +120,7 @@ async function runQuickPickFlow(folder: vscode.WorkspaceFolder): Promise<void> {
 			await vscode.window.showTextDocument(stateUri);
 		}
 	} else {
-		vscode.window.showErrorMessage(
-			result.message ?? `Failed to update state.json.`
-		);
+		vscode.window.showErrorMessage(result.message ?? `Failed to update state.json.`);
 	}
 }
 
@@ -110,21 +128,39 @@ export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "quam-state-editor" is now active!');
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('quam-state-editor.open', () => {
+		vscode.commands.registerCommand('quam-state-editor.open', async () => {
 			const folder = vscode.workspace.workspaceFolders?.[0];
 			if (!folder) {
 				vscode.window.showErrorMessage('Open a folder in the workspace first.');
 				return;
 			}
-			QuamStateEditorPanel.createOrShow(context.extensionUri, folder);
+			await openWithStateFile(context, folder, true);
 		}),
-		vscode.commands.registerCommand('quam-state-editor.openQuickPick', () => {
+		vscode.commands.registerCommand('quam-state-editor.openQuickPick', async () => {
 			const folder = vscode.workspace.workspaceFolders?.[0];
 			if (!folder) {
 				vscode.window.showErrorMessage('Open a folder in the workspace first.');
 				return;
 			}
-			void runQuickPickFlow(folder);
+			await openWithStateFile(context, folder, false);
+		}),
+		vscode.commands.registerCommand('quam-state-editor.selectStateFile', async () => {
+			const folder = vscode.workspace.workspaceFolders?.[0];
+			if (!folder) {
+				vscode.window.showErrorMessage('Open a folder in the workspace first.');
+				return;
+			}
+			const stateUri = await promptSelectStateFileUri(context, folder);
+			if (!stateUri) {
+				return;
+			}
+			const panel = QuamStateEditorPanel.getCurrentPanel();
+			if (panel) {
+				panel.setStateFile(stateUri);
+				await panel.reloadCatalog();
+			} else {
+				vscode.window.showInformationMessage(`Using state file: ${stateUri.fsPath}`);
+			}
 		})
 	);
 }

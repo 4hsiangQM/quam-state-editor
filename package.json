@@ -21,6 +21,11 @@
         "command": "quam-state-editor.openQuickPick",
         "title": "Open (Quick Pick)",
         "category": "QuAM State Editor"
+      },
+      {
+        "command": "quam-state-editor.selectStateFile",
+        "title": "Select state.json",
+        "category": "QuAM State Editor"
       }
     ]
   },

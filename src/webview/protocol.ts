@@ -10,7 +10,7 @@ export type WebviewToHostMessage =
 	  };
 
 export type HostToWebviewMessage =
-	| { type: 'catalog'; payload: ParameterCatalog }
+	| { type: 'catalog'; payload: ParameterCatalog; stateFilePath: string }
 	| {
 			type: 'applyResult';
 			ok: boolean;

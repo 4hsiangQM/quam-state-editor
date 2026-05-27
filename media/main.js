@@ -23,6 +23,7 @@
 	};
 
 	const statusEl = document.getElementById('status');
+	const stateFileEl = document.getElementById('state-file');
 	const qubitListEl = document.getElementById('qubit-list');
 	const categoryEl = /** @type {HTMLSelectElement} */ (document.getElementById('category'));
 	const locationSection = document.getElementById('location-section');
@@ -293,8 +294,11 @@
 		renderValueTable();
 	}
 
-	function onCatalog(payload) {
-		catalog = payload;
+	function onCatalog(message) {
+		catalog = message.payload;
+		if (stateFileEl && message.stateFilePath) {
+			stateFileEl.textContent = `File: ${message.stateFilePath}`;
+		}
 		renderQubits();
 		setStatus(
 			catalog.qubits.length === 0
@@ -346,7 +350,7 @@
 		const message = event.data;
 		switch (message.type) {
 			case 'catalog':
-				onCatalog(message.payload);
+				onCatalog(message);
 				break;
 			case 'applyResult':
 				if (message.ok) {

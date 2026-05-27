@@ -7,8 +7,8 @@ import {
 	type ParameterCatalog,
 } from '../catalog.js';
 import {
-	getStateBackupUri,
-	getStateFileUri,
+	formatStateFilePath,
+	getBackupUriForStateFile,
 	readStateFile,
 	type StateJson,
 } from '../stateFile.js';
@@ -22,8 +22,9 @@ export class QuamStateEditorPanel {
 	private readonly panel: vscode.WebviewPanel;
 	private readonly extensionUri: vscode.Uri;
 	private readonly workspaceFolder: vscode.WorkspaceFolder;
-	private readonly stateUri: vscode.Uri;
-	private readonly backupUri: vscode.Uri;
+
+	private stateUri: vscode.Uri;
+	private backupUri: vscode.Uri;
 
 	private data: StateJson = {};
 	private rawBytes: Uint8Array = new Uint8Array();
@@ -37,13 +38,14 @@ export class QuamStateEditorPanel {
 	private constructor(
 		panel: vscode.WebviewPanel,
 		extensionUri: vscode.Uri,
-		workspaceFolder: vscode.WorkspaceFolder
+		workspaceFolder: vscode.WorkspaceFolder,
+		stateUri: vscode.Uri
 	) {
 		this.panel = panel;
 		this.extensionUri = extensionUri;
 		this.workspaceFolder = workspaceFolder;
-		this.stateUri = getStateFileUri(workspaceFolder);
-		this.backupUri = getStateBackupUri(workspaceFolder);
+		this.stateUri = stateUri;
+		this.backupUri = getBackupUriForStateFile(stateUri);
 
 		this.panel.webview.html = this.getHtml();
 
@@ -56,15 +58,17 @@ export class QuamStateEditorPanel {
 		});
 	}
 
-	public static createOrShow(
+	public static async createOrShow(
 		extensionUri: vscode.Uri,
-		workspaceFolder: vscode.WorkspaceFolder
-	): void {
+		workspaceFolder: vscode.WorkspaceFolder,
+		stateUri: vscode.Uri
+	): Promise<void> {
 		const column = vscode.window.activeTextEditor?.viewColumn;
 
 		if (QuamStateEditorPanel.currentPanel) {
+			QuamStateEditorPanel.currentPanel.setStateFile(stateUri);
 			QuamStateEditorPanel.currentPanel.panel.reveal(column);
-			void QuamStateEditorPanel.currentPanel.reloadCatalog();
+			await QuamStateEditorPanel.currentPanel.reloadCatalog();
 			return;
 		}
 
@@ -82,38 +86,64 @@ export class QuamStateEditorPanel {
 		QuamStateEditorPanel.currentPanel = new QuamStateEditorPanel(
 			panel,
 			extensionUri,
-			workspaceFolder
+			workspaceFolder,
+			stateUri
 		);
+	}
+
+	public static getCurrentPanel(): QuamStateEditorPanel | undefined {
+		return QuamStateEditorPanel.currentPanel;
+	}
+
+	public setStateFile(stateUri: vscode.Uri): void {
+		this.stateUri = stateUri;
+		this.backupUri = getBackupUriForStateFile(stateUri);
 	}
 
 	private postMessage(message: HostToWebviewMessage): void {
 		void this.panel.webview.postMessage(message);
 	}
 
-	private async reloadCatalog(): Promise<void> {
+	private stateFilePathLabel(): string {
+		return formatStateFilePath(this.stateUri, this.workspaceFolder);
+	}
+
+	private postCatalog(): void {
+		this.postMessage({
+			type: 'catalog',
+			payload: this.catalog,
+			stateFilePath: this.stateFilePathLabel(),
+		});
+	}
+
+	async reloadCatalog(): Promise<void> {
 		try {
 			const read = await readStateFile(this.stateUri);
 			this.data = read.data;
 			this.rawBytes = read.rawBytes;
 
 			if (!this.data.qubits || typeof this.data.qubits !== 'object') {
-				this.postMessage({ type: 'status', message: 'state.json has no "qubits" object.', level: 'error' });
+				this.postMessage({
+					type: 'status',
+					message: `${this.stateFilePathLabel()}: no "qubits" object.`,
+					level: 'error',
+				});
 				this.catalog = {
 					qubits: [],
 					entries: [],
 					qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
 					qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
 				};
-				this.postMessage({ type: 'catalog', payload: this.catalog });
+				this.postCatalog();
 				return;
 			}
 
 			this.catalog = buildParameterCatalog(this.data);
-			this.postMessage({ type: 'catalog', payload: this.catalog });
+			this.postCatalog();
 		} catch (err) {
 			this.postMessage({
 				type: 'status',
-				message: `Could not read quam_state/state.json: ${err instanceof Error ? err.message : String(err)}`,
+				message: `Could not read ${this.stateFilePathLabel()}: ${err instanceof Error ? err.message : String(err)}`,
 				level: 'error',
 			});
 		}
@@ -147,7 +177,7 @@ export class QuamStateEditorPanel {
 			this.data = data;
 			this.rawBytes = rawBytes;
 			this.catalog = buildParameterCatalog(this.data);
-			this.postMessage({ type: 'catalog', payload: this.catalog });
+			this.postCatalog();
 			this.postMessage({ type: 'applyResult', ok: true, updatedLabels: result.updatedLabels });
 
 			const summary =
@@ -187,6 +217,7 @@ export class QuamStateEditorPanel {
 	<header>
 		<h1>QuAM State Editor</h1>
 		<p id="status" class="status">Loading…</p>
+		<p id="state-file" class="state-file"></p>
 	</header>
 
 	<section class="field">
