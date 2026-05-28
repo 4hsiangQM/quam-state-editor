@@ -4,6 +4,10 @@
   "displayName": "QuAM State Editor",
   "description": "Edit calibration parameters in state.json",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/4hsiangQM/quam-state-editor.git"
+  },
   "engines": {
     "vscode": "^1.105.0"
   },

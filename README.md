@@ -25,6 +25,28 @@ Edit numeric calibration parameters in QuAM `state.json` from **Cursor** or **VS
 
 Do this once on the machine where you develop the extension, or download a pre-built `.vsix` if someone shared it with you.
 
+### Install Node.js and npm (if needed)
+
+`npm` comes with **Node.js**. You only need this step to **build** the `.vsix`; skip it if someone already gave you a `.vsix` file.
+
+Check whether they are already installed:
+
+```bash
+node -v
+npm -v
+```
+
+If both commands print a version (Node **18 or newer**), you are ready — go to [Build commands](#macos--windows-same-commands) below.
+
+If you see `command not found` (or similar), install Node.js:
+
+| Platform | How to install |
+|----------|----------------|
+| **macOS** | **Homebrew** (recommended): `brew install node` — or download the **LTS** installer from [nodejs.org](https://nodejs.org/) |
+| **Windows** | Download the **LTS** installer from [nodejs.org](https://nodejs.org/) (includes npm), or in PowerShell: `winget install OpenJS.NodeJS.LTS` |
+
+After installing, **open a new terminal** and run `node -v` and `npm -v` again to confirm.
+
 ### macOS / Windows (same commands)
 
 Open a terminal in the extension project folder:
@@ -137,57 +159,6 @@ Each time you run **Open Panel** (or **Open Quick Pick**), a file dialog lets yo
 
 While the panel stays open, use **Reload** for the current file or **Change file…** to switch without closing the panel.
 
-### 3. Edit parameters
-
-Use the **Qubit** or **Qubit pair** tab at the top of the panel.
-
-**Qubit tab**
-
-1. Check one or more **Qubits**.
-2. Choose **Category** (`xy`, `resonator`, `z`, or **Qubit property** for fields like `anharmonicity`).
-3. For category fields (not Qubit property): choose **Location** → **On category** or **In operation**, then **Parameter** (and **Operation** if needed).
-4. Enter **New value** per qubit. **Leave blank to skip** that qubit.
-5. Click **Apply** (creates `.bak` backup, then writes JSON).
-
-**Qubit pair tab**
-
-Same flow for `qubit_pairs` (e.g. categories `coupler`, `gates`, `extras`, or **Pair property** for `J2`, `detuning`). Multi-select pairs is supported.
-
-**All tabs**
-
-- **Reload** re-reads the current file from disk.
-- **Change file…** switches to a different `state.json`.
-
-### Other commands
-
-| Command | Description |
-|---------|-------------|
-| **QuAM State Editor: Open Panel** | Main Webview UI (always prompts for `state.json`) |
-| **QuAM State Editor: Open (Quick Pick)** | Legacy one-qubit-at-a-time flow |
-| **QuAM State Editor: Select state.json** | Pick a different `state.json` for this workspace |
-
----
-
-## Install into VS Code (optional)
-
-Same `.vsix` works in VS Code:
-
-**macOS**
-
-```bash
-code --install-extension /full/path/to/quam-state-editor-0.0.1.vsix
-```
-
-**Windows**
-
-```powershell
-code --install-extension C:\path\to\quam-state-editor-0.0.1.vsix
-```
-
-Or use **Extensions: Install from VSIX...** in the Command Palette.
-
----
-
 ## Update after code changes
 
 1. Bump `version` in `package.json` (e.g. `0.0.2`).
@@ -203,35 +174,6 @@ Or use **Extensions: Install from VSIX...** in the Command Palette.
 
 ---
 
-## Development (F5)
-
-For contributors modifying this repo:
-
-```bash
-npm install
-npm run compile
-```
-
-| | macOS | Windows |
-|---|--------|---------|
-| Run extension in dev host | Open this folder in Cursor → **F5** (Run Extension) | same |
-
-A second window opens with `[Extension Development Host]` in the title. That window is for **testing the extension**, not for daily calibration edits. For daily use, install the `.vsix` as described above.
-
----
-
-## Troubleshooting
-
-| Problem | What to try |
-|---------|-------------|
-| Commands not found | Confirm `.vsix` is installed; reload window; use a normal Cursor window (not only the dev host) |
-| “Open a folder first” | **File → Open Folder** on your experiment project |
-| Category / Parameter resets | Update to latest build; re-install `.vsix` |
-| `cursor` / `code` not in PATH | Run **Shell Command: Install … command in PATH** from Command Palette |
-| Apply does nothing | Check all new values are valid numbers; one invalid value blocks the whole apply |
-| Stuck on one state.json | Run **Open Panel** again to pick a file, or use **Change file…** / **Select state.json** (Reload only refreshes the current file) |
-
----
 
 ## License
 
