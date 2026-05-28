@@ -149,6 +149,19 @@ select {
 	opacity: 0.6;
 }
 
+.value-table textarea.matrix-input {
+	width: 100%;
+	min-width: 200px;
+	min-height: 88px;
+	padding: 4px 6px;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.85em;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border);
+	resize: vertical;
+}
+
 .value-table .missing {
 	color: var(--vscode-errorForeground);
 	font-style: italic;

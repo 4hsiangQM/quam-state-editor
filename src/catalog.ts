@@ -1,8 +1,18 @@
 import type { StateJson } from './stateFile.js';
-import type { NumericParameter } from './parameterIndex.js';
+import type { ScannedParameter } from './parameterIndex.js';
 import { scanNumericParameters, scanQubitPairParameters } from './parameterIndex.js';
+import { isNumeric1dArray, isNumeric2dMatrix } from './arrayFields.js';
 
-export type ParameterKind = 'direct' | 'operation' | 'qubitProperty';
+export type ParameterKind = 'direct' | 'operation' | 'qubitProperty' | 'matrix' | 'array';
+
+export type CatalogValueKind = 'number' | 'matrix' | 'array';
+
+export interface CatalogSlot {
+	path: string[];
+	valueKind: CatalogValueKind;
+	value?: number;
+	matrixJson?: string;
+}
 
 export interface ClassifiedParameter {
 	kind: ParameterKind;
@@ -17,23 +27,29 @@ export interface CatalogEntry {
 	category: string;
 	operation?: string;
 	parameter: string;
-	byQubit: Record<string, { path: string[]; value: number } | null>;
+	byQubit: Record<string, CatalogSlot | null>;
 }
 
 export interface ParameterCatalog {
 	qubits: string[];
 	entries: CatalogEntry[];
-	/** Category dropdown value for qubit-level properties (display: qubitPropertyCategoryLabel). */
 	qubitPropertyCategory: string;
 	qubitPropertyCategoryLabel: string;
 }
 
-/** Internal category id for qubit-root numeric fields (anharmonicity, T1, …). */
 export const QUBIT_PROPERTY_CATEGORY = '__qubit_property__';
 export const QUBIT_PROPERTY_CATEGORY_LABEL = 'Qubit property';
 
-/** Classify a scanned path into qubit property, direct (under category), or operation. */
-export function classifyParameterPath(path: string[]): ClassifiedParameter | null {
+function formatParameterName(segments: string[]): string {
+	if (segments.length >= 2 && /^\d+$/.test(segments[segments.length - 1] ?? '')) {
+		const index = segments[segments.length - 1];
+		const field = segments.slice(0, -1).join('.');
+		return `${field}[${index}]`;
+	}
+	return segments.join('.');
+}
+
+function classifyQubitPathFromScan(path: string[], valueKind: CatalogValueKind): ClassifiedParameter | null {
 	if (path.length < 3 || path[0] !== 'qubits') {
 		return null;
 	}
@@ -47,6 +63,16 @@ export function classifyParameterPath(path: string[]): ClassifiedParameter | nul
 	}
 
 	const category = path[2];
+	const tail = path.slice(3);
+
+	if (valueKind === 'matrix' || valueKind === 'array') {
+		return {
+			kind: valueKind,
+			category,
+			parameter: tail.join('.'),
+		};
+	}
+
 	if (path[3] === 'operations' && path.length >= 6) {
 		return {
 			kind: 'operation',
@@ -67,13 +93,27 @@ export function classifyParameterPath(path: string[]): ClassifiedParameter | nul
 	return {
 		kind: 'direct',
 		category,
-		parameter: path.slice(3).join('.'),
+		parameter: formatParameterName(tail),
 	};
+}
+
+/** Classify a scanned path into qubit property, direct (under category), operation, or matrix. */
+export function classifyParameterPath(
+	path: string[],
+	valueKind: CatalogValueKind = 'number'
+): ClassifiedParameter | null {
+	return classifyQubitPathFromScan(path, valueKind);
 }
 
 function entryKey(classified: ClassifiedParameter): string {
 	if (classified.kind === 'qubitProperty') {
 		return `qubitProperty|${classified.parameter}`;
+	}
+	if (classified.kind === 'matrix') {
+		return `matrix|${classified.category}|${classified.parameter}`;
+	}
+	if (classified.kind === 'array') {
+		return `array|${classified.category}|${classified.parameter}`;
 	}
 	if (classified.kind === 'operation') {
 		return `operation|${classified.category}|${classified.operation}|${classified.parameter}`;
@@ -81,12 +121,27 @@ function entryKey(classified: ClassifiedParameter): string {
 	return `direct|${classified.category}|${classified.parameter}`;
 }
 
+function scannedToSlot(param: ScannedParameter): CatalogSlot {
+	if (param.valueKind === 'matrix' || param.valueKind === 'array') {
+		return {
+			path: param.path,
+			valueKind: param.valueKind,
+			matrixJson: param.displayValue,
+		};
+	}
+	return {
+		path: param.path,
+		valueKind: 'number',
+		value: param.value,
+	};
+}
+
 function mergeParameter(
 	entries: Map<string, CatalogEntry>,
 	qubitName: string,
-	param: NumericParameter
+	param: ScannedParameter
 ): void {
-	const classified = classifyParameterPath(param.path);
+	const classified = classifyParameterPath(param.path, param.valueKind);
 	if (!classified) {
 		return;
 	}
@@ -105,7 +160,41 @@ function mergeParameter(
 		entries.set(key, entry);
 	}
 
-	entry.byQubit[qubitName] = { path: param.path, value: param.value };
+	entry.byQubit[qubitName] = scannedToSlot(param);
+}
+
+function sortCatalogEntries(entries: CatalogEntry[]): CatalogEntry[] {
+	return [...entries].sort((a, b) => {
+		if (a.kind === 'qubitProperty' && b.kind !== 'qubitProperty') {
+			return -1;
+		}
+		if (b.kind === 'qubitProperty' && a.kind !== 'qubitProperty') {
+			return 1;
+		}
+		if (a.kind === 'qubitProperty' && b.kind === 'qubitProperty') {
+			return a.parameter.localeCompare(b.parameter);
+		}
+		const cat = a.category.localeCompare(b.category);
+		if (cat !== 0) {
+			return cat;
+		}
+		if (a.kind !== b.kind) {
+			if (a.kind === 'matrix' || a.kind === 'array') {
+				return -1;
+			}
+			if (b.kind === 'matrix' || b.kind === 'array') {
+				return 1;
+			}
+			return a.kind === 'direct' ? -1 : 1;
+		}
+		const opA = a.operation ?? '';
+		const opB = b.operation ?? '';
+		const op = opA.localeCompare(opB);
+		if (op !== 0) {
+			return op;
+		}
+		return a.parameter.localeCompare(b.parameter, undefined, { numeric: true });
+	});
 }
 
 export function buildParameterCatalog(data: StateJson): ParameterCatalog {
@@ -128,35 +217,9 @@ export function buildParameterCatalog(data: StateJson): ParameterCatalog {
 		}
 	}
 
-	const sortedEntries = [...entries.values()].sort((a, b) => {
-		if (a.kind === 'qubitProperty' && b.kind !== 'qubitProperty') {
-			return -1;
-		}
-		if (b.kind === 'qubitProperty' && a.kind !== 'qubitProperty') {
-			return 1;
-		}
-		if (a.kind === 'qubitProperty' && b.kind === 'qubitProperty') {
-			return a.parameter.localeCompare(b.parameter);
-		}
-		const cat = a.category.localeCompare(b.category);
-		if (cat !== 0) {
-			return cat;
-		}
-		if (a.kind !== b.kind) {
-			return a.kind === 'direct' ? -1 : 1;
-		}
-		const opA = a.operation ?? '';
-		const opB = b.operation ?? '';
-		const op = opA.localeCompare(opB);
-		if (op !== 0) {
-			return op;
-		}
-		return a.parameter.localeCompare(b.parameter);
-	});
-
 	return {
 		qubits: qubitNames,
-		entries: sortedEntries,
+		entries: sortCatalogEntries([...entries.values()]),
 		qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
 		qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
 	};
@@ -171,7 +234,7 @@ export interface PairCatalogEntry {
 	category: string;
 	operation?: string;
 	parameter: string;
-	byPair: Record<string, { path: string[]; value: number } | null>;
+	byPair: Record<string, CatalogSlot | null>;
 }
 
 export interface QubitPairCatalog {
@@ -181,8 +244,10 @@ export interface QubitPairCatalog {
 	pairPropertyCategoryLabel: string;
 }
 
-/** Classify a qubit_pair path (mirrors qubit rules where structure matches). */
-export function classifyQubitPairPath(path: string[]): ClassifiedParameter | null {
+export function classifyQubitPairPath(
+	path: string[],
+	valueKind: CatalogValueKind = 'number'
+): ClassifiedParameter | null {
 	if (path.length < 3 || path[0] !== 'qubit_pairs') {
 		return null;
 	}
@@ -192,6 +257,14 @@ export function classifyQubitPairPath(path: string[]): ClassifiedParameter | nul
 			kind: 'qubitProperty',
 			category: PAIR_PROPERTY_CATEGORY,
 			parameter: path[2],
+		};
+	}
+
+	if (path[2] === 'extras' && path.length === 4 && valueKind === 'array') {
+		return {
+			kind: 'array',
+			category: 'extras',
+			parameter: path[3],
 		};
 	}
 
@@ -213,7 +286,7 @@ export function classifyQubitPairPath(path: string[]): ClassifiedParameter | nul
 		return {
 			kind: 'direct',
 			category: 'coupler',
-			parameter: path.slice(3).join('.'),
+			parameter: formatParameterName(path.slice(3)),
 		};
 	}
 
@@ -222,16 +295,17 @@ export function classifyQubitPairPath(path: string[]): ClassifiedParameter | nul
 			kind: 'operation',
 			category: 'gates',
 			operation: path[3],
-			parameter: path.slice(4).join('.'),
+			parameter: formatParameterName(path.slice(4)),
 		};
 	}
 
-	if (path[2] === 'extras' && path.length === 4) {
-		return { kind: 'direct', category: 'extras', parameter: path[3] };
-	}
-
 	if (path[2] === 'extras') {
-		return { kind: 'direct', category: 'extras', parameter: path.slice(3).join('.') };
+		const tail = path.slice(3);
+		return {
+			kind: 'direct',
+			category: 'extras',
+			parameter: formatParameterName(tail),
+		};
 	}
 
 	return null;
@@ -240,9 +314,9 @@ export function classifyQubitPairPath(path: string[]): ClassifiedParameter | nul
 function mergePairParameter(
 	entries: Map<string, PairCatalogEntry>,
 	pairName: string,
-	param: NumericParameter
+	param: ScannedParameter
 ): void {
-	const classified = classifyQubitPairPath(param.path);
+	const classified = classifyQubitPairPath(param.path, param.valueKind);
 	if (!classified) {
 		return;
 	}
@@ -261,7 +335,7 @@ function mergePairParameter(
 		entries.set(key, entry);
 	}
 
-	entry.byPair[pairName] = { path: param.path, value: param.value };
+	entry.byPair[pairName] = scannedToSlot(param);
 }
 
 function sortPairEntries(entries: PairCatalogEntry[]): PairCatalogEntry[] {
@@ -280,6 +354,12 @@ function sortPairEntries(entries: PairCatalogEntry[]): PairCatalogEntry[] {
 			return cat;
 		}
 		if (a.kind !== b.kind) {
+			if (a.kind === 'matrix' || a.kind === 'array') {
+				return -1;
+			}
+			if (b.kind === 'matrix' || b.kind === 'array') {
+				return 1;
+			}
 			return a.kind === 'direct' ? -1 : 1;
 		}
 		const opA = a.operation ?? '';
@@ -288,7 +368,7 @@ function sortPairEntries(entries: PairCatalogEntry[]): PairCatalogEntry[] {
 		if (op !== 0) {
 			return op;
 		}
-		return a.parameter.localeCompare(b.parameter);
+		return a.parameter.localeCompare(b.parameter, undefined, { numeric: true });
 	});
 }
 
@@ -320,7 +400,32 @@ export function buildQubitPairCatalog(data: StateJson): QubitPairCatalog {
 	};
 }
 
+export type ApplyCatalog = ParameterCatalog | QubitPairCatalog;
+
 export interface EditorCatalogPayload {
 	qubitCatalog: ParameterCatalog;
 	qubitPairCatalog: QubitPairCatalog;
+}
+
+export function parseJsonArrayFromSlot(
+	matrixJson: string | undefined
+): number[] | number[][] | undefined {
+	if (!matrixJson) {
+		return undefined;
+	}
+	try {
+		const parsed = JSON.parse(matrixJson) as unknown;
+		if (isNumeric1dArray(parsed)) {
+			return parsed;
+		}
+		return isNumeric2dMatrix(parsed) ? parsed : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** @deprecated Use parseJsonArrayFromSlot */
+export function parseMatrixJsonFromSlot(matrixJson: string | undefined): number[][] | undefined {
+	const parsed = parseJsonArrayFromSlot(matrixJson);
+	return parsed && Array.isArray(parsed[0]) ? (parsed as number[][]) : undefined;
 }

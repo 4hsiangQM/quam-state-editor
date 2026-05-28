@@ -9,11 +9,11 @@
 	 *     qubits: string[],
 	 *     entries: Array<{
 	 *       key: string,
-	 *       kind: 'direct' | 'operation' | 'qubitProperty',
+	 *       kind: 'direct' | 'operation' | 'qubitProperty' | 'matrix',
 	 *       category: string,
 	 *       operation?: string,
 	 *       parameter: string,
-	 *       byQubit: Record<string, { path: string[], value: number } | null>
+	 *       byQubit: Record<string, { path: string[], valueKind: 'number' | 'matrix', value?: number, matrixJson?: string } | null>
 	 *     }>,
 	 *     qubitPropertyCategory: string,
 	 *     qubitPropertyCategoryLabel: string
@@ -26,7 +26,7 @@
 	 *       category: string,
 	 *       operation?: string,
 	 *       parameter: string,
-	 *       byPair: Record<string, { path: string[], value: number } | null>
+	 *       byPair: Record<string, { path: string[], valueKind: 'number' | 'matrix', value?: number, matrixJson?: string } | null>
 	 *     }>,
 	 *     pairPropertyCategory: string,
 	 *     pairPropertyCategoryLabel: string
@@ -114,6 +114,10 @@
 		return checked ? /** @type {HTMLInputElement} */ (checked).value : 'direct';
 	}
 
+	function isJsonBlobKind(valueKind) {
+		return valueKind === 'matrix' || valueKind === 'array';
+	}
+
 	function getSelectedEntry() {
 		const key = parameterEl.value;
 		if (!key) {
@@ -143,7 +147,13 @@
 
 		const kind = getLocationKind();
 		return activeCatalog().entries.filter((entry) => {
-			if (entry.kind === 'qubitProperty' || entry.category !== category || entry.kind !== kind) {
+			if (entry.kind === 'qubitProperty' || entry.category !== category) {
+				return false;
+			}
+			if (entry.kind === 'matrix' || entry.kind === 'array') {
+				return kind === 'direct' && selectedEntities.every((name) => slotForEntry(entry, name));
+			}
+			if (entry.kind !== kind) {
 				return false;
 			}
 			return selectedEntities.every((name) => slotForEntry(entry, name));
@@ -259,13 +269,27 @@
 	function readPendingNewValues() {
 		/** @type {Map<string, string>} */
 		const pending = new Map();
-		for (const el of valueBody.querySelectorAll('input[data-entity]')) {
-			const input = /** @type {HTMLInputElement} */ (el);
+		for (const el of valueBody.querySelectorAll('input[data-entity], textarea[data-entity]')) {
+			const input = /** @type {HTMLInputElement | HTMLTextAreaElement} */ (el);
 			if (input.dataset.entity) {
 				pending.set(input.dataset.entity, input.value);
 			}
 		}
 		return pending;
+	}
+
+	function formatCurrentValue(slot) {
+		if (isJsonBlobKind(slot.valueKind)) {
+			return slot.matrixJson ?? '';
+		}
+		return String(slot.value ?? '');
+	}
+
+	function truncateDisplay(text, maxLen) {
+		if (text.length <= maxLen) {
+			return text;
+		}
+		return `${text.slice(0, maxLen)}…`;
 	}
 
 	function renderValueTable() {
@@ -300,15 +324,36 @@
 				tdCurrent.textContent = missingLabel;
 				tr.appendChild(tdCurrent);
 			} else {
-				tdCurrent.textContent = String(slot.value);
-				const input = document.createElement('input');
-				input.type = 'text';
-				input.dataset.entity = entityName;
-				input.placeholder = 'leave blank to skip';
-				if (pendingNewValues.has(entityName)) {
-					input.value = pendingNewValues.get(entityName) ?? '';
+				const currentText = formatCurrentValue(slot);
+				tdCurrent.textContent = isJsonBlobKind(slot.valueKind)
+					? truncateDisplay(currentText, 80)
+					: currentText;
+				if (isJsonBlobKind(slot.valueKind)) {
+					tdCurrent.title = currentText;
 				}
-				tdNew.appendChild(input);
+
+				if (isJsonBlobKind(slot.valueKind)) {
+					const textarea = document.createElement('textarea');
+					textarea.rows = 5;
+					textarea.dataset.entity = entityName;
+					textarea.dataset.valueKind = slot.valueKind;
+					textarea.placeholder = 'Paste JSON array; leave blank to skip';
+					textarea.className = 'matrix-input';
+					if (pendingNewValues.has(entityName)) {
+						textarea.value = pendingNewValues.get(entityName) ?? '';
+					}
+					tdNew.appendChild(textarea);
+				} else {
+					const input = document.createElement('input');
+					input.type = 'text';
+					input.dataset.entity = entityName;
+					input.dataset.valueKind = 'number';
+					input.placeholder = 'leave blank to skip';
+					if (pendingNewValues.has(entityName)) {
+						input.value = pendingNewValues.get(entityName) ?? '';
+					}
+					tdNew.appendChild(input);
+				}
 				tr.appendChild(tdCurrent);
 				tr.appendChild(tdNew);
 			}
@@ -449,11 +494,11 @@
 			return;
 		}
 
-		/** @type {Array<{ entity: string, path: string[], newValue: string }>} */
+		/** @type {Array<{ entity: string, path: string[], newValue: string, valueKind: 'number' | 'matrix' | 'array' }>} */
 		const edits = [];
-		const inputs = valueBody.querySelectorAll('input[data-entity]');
-		for (const el of inputs) {
-			const input = /** @type {HTMLInputElement} */ (el);
+		const fields = valueBody.querySelectorAll('input[data-entity], textarea[data-entity]');
+		for (const el of fields) {
+			const input = /** @type {HTMLInputElement | HTMLTextAreaElement} */ (el);
 			const entity = input.dataset.entity;
 			const slot = slotForEntry(entry, entity);
 			if (!slot || !entity) {
@@ -463,6 +508,7 @@
 				entity,
 				path: slot.path,
 				newValue: input.value,
+				valueKind: isJsonBlobKind(slot.valueKind) ? slot.valueKind : 'number',
 			});
 		}
 

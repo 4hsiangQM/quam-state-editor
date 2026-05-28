@@ -6,6 +6,9 @@ Edit numeric calibration parameters in QuAM `state.json` from **Cursor** or **VS
 
 - **Webview panel**: select qubits or **qubit pairs**, category (including **Qubit property** / **Pair property**), operations, and parameters
 - **Multi-entity editing**: set a different new value per qubit or pair in one apply (blank = skip)
+- **JSON arrays**: qubit `confusion_matrix` / `gef_confusion_matrix`; pair `flux_values` / `J_vs_flux` — edit as JSON in the Values table
+- **1D scalars**: `filter_fir_taps`, `filter_iir_taps` shown as `field[i]`
+- Qubit-pair confusion matrices are intentionally excluded (edit in raw JSON if needed)
 - **Quick Pick** flow: step-by-step single-qubit edit
 - **Backup** before write: creates `<your-file>.json.bak` next to the file you edit
 - **Remember `state.json` path** per workspace folder

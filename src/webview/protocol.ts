@@ -10,7 +10,12 @@ export type WebviewToHostMessage =
 			type: 'apply';
 			target: EditorTarget;
 			entryKey: string;
-			edits: Array<{ entity: string; path: string[]; newValue: string }>;
+			edits: Array<{
+				entity: string;
+				path: string[];
+				newValue: string;
+				valueKind: 'number' | 'matrix' | 'array';
+			}>;
 	  };
 
 export type HostToWebviewMessage =

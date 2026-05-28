@@ -110,7 +110,7 @@ async function runQuickPickFlow(
 	const catalog = buildParameterCatalog(data);
 
 	const { result } = await applyParameterEdits(stateUri, backupUri, data, rawBytes, catalog, {
-		edits: [{ entity: qubitName, path: selected.path, newValue: String(newValue) }],
+		edits: [{ entity: qubitName, path: selected.path, newValue: String(newValue), valueKind: 'number' }],
 	});
 
 	if (result.ok) {
