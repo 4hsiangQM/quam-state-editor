@@ -4,6 +4,7 @@ const STATE_FILE_URI_KEY = 'quamStateEditor.stateFileUri';
 
 export interface StateJson {
 	qubits?: Record<string, unknown>;
+	qubit_pairs?: Record<string, unknown>;
 	[key: string]: unknown;
 }
 

@@ -65,12 +65,38 @@ select {
 	border: 1px solid var(--vscode-dropdown-border);
 }
 
-.qubit-list {
+.domain-tabs {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 16px;
+}
+
+.domain-tab {
+	padding: 6px 12px;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	border: 1px solid var(--vscode-widget-border);
+	cursor: pointer;
+	font-size: 0.9em;
+}
+
+.domain-tab.active {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.domain-tab:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.entity-list {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px 16px;
 }
 
+.entity-list label,
 .qubit-list label {
 	font-weight: normal;
 	display: inline-flex;

@@ -55,3 +55,41 @@ export function scanNumericParameters(qubitName: string, qubit: unknown): Numeri
 	visit(qubit, []);
 	return results.sort((a, b) => a.label.localeCompare(b.label));
 }
+
+/**
+ * Recursively collect numeric leaf values under one qubit_pair object.
+ * Paths are rooted at ["qubit_pairs", pairName, ...].
+ */
+export function scanQubitPairParameters(pairName: string, pair: unknown): NumericParameter[] {
+	const results: NumericParameter[] = [];
+	const basePath = ['qubit_pairs', pairName];
+
+	function visit(node: unknown, pathFromPair: string[]): void {
+		if (typeof node === 'number') {
+			const path = [...basePath, ...pathFromPair];
+			const relative = pathFromPair.join('.');
+			results.push({
+				label: relative,
+				description: String(node),
+				detail: `/${path.join('/')}`,
+				path,
+				value: node,
+			});
+			return;
+		}
+
+		if (node === null || typeof node !== 'object' || Array.isArray(node)) {
+			return;
+		}
+
+		for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+			if (IGNORED_KEYS.has(key)) {
+				continue;
+			}
+			visit(value, [...pathFromPair, key]);
+		}
+	}
+
+	visit(pair, []);
+	return results.sort((a, b) => a.label.localeCompare(b.label));
+}

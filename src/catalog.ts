@@ -1,6 +1,6 @@
 import type { StateJson } from './stateFile.js';
 import type { NumericParameter } from './parameterIndex.js';
-import { scanNumericParameters } from './parameterIndex.js';
+import { scanNumericParameters, scanQubitPairParameters } from './parameterIndex.js';
 
 export type ParameterKind = 'direct' | 'operation' | 'qubitProperty';
 
@@ -160,4 +160,167 @@ export function buildParameterCatalog(data: StateJson): ParameterCatalog {
 		qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
 		qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
 	};
+}
+
+export const PAIR_PROPERTY_CATEGORY = '__pair_property__';
+export const PAIR_PROPERTY_CATEGORY_LABEL = 'Pair property';
+
+export interface PairCatalogEntry {
+	key: string;
+	kind: ParameterKind;
+	category: string;
+	operation?: string;
+	parameter: string;
+	byPair: Record<string, { path: string[]; value: number } | null>;
+}
+
+export interface QubitPairCatalog {
+	pairs: string[];
+	entries: PairCatalogEntry[];
+	pairPropertyCategory: string;
+	pairPropertyCategoryLabel: string;
+}
+
+/** Classify a qubit_pair path (mirrors qubit rules where structure matches). */
+export function classifyQubitPairPath(path: string[]): ClassifiedParameter | null {
+	if (path.length < 3 || path[0] !== 'qubit_pairs') {
+		return null;
+	}
+
+	if (path.length === 3) {
+		return {
+			kind: 'qubitProperty',
+			category: PAIR_PROPERTY_CATEGORY,
+			parameter: path[2],
+		};
+	}
+
+	if (path[2] === 'coupler') {
+		if (path[3] === 'operations' && path.length >= 6) {
+			return {
+				kind: 'operation',
+				category: 'coupler',
+				operation: path[4],
+				parameter: path[5],
+			};
+		}
+		if (path[3] === 'operations') {
+			return null;
+		}
+		if (path.length === 4) {
+			return { kind: 'direct', category: 'coupler', parameter: path[3] };
+		}
+		return {
+			kind: 'direct',
+			category: 'coupler',
+			parameter: path.slice(3).join('.'),
+		};
+	}
+
+	if (path[2] === 'gates' && path.length >= 5) {
+		return {
+			kind: 'operation',
+			category: 'gates',
+			operation: path[3],
+			parameter: path.slice(4).join('.'),
+		};
+	}
+
+	if (path[2] === 'extras' && path.length === 4) {
+		return { kind: 'direct', category: 'extras', parameter: path[3] };
+	}
+
+	if (path[2] === 'extras') {
+		return { kind: 'direct', category: 'extras', parameter: path.slice(3).join('.') };
+	}
+
+	return null;
+}
+
+function mergePairParameter(
+	entries: Map<string, PairCatalogEntry>,
+	pairName: string,
+	param: NumericParameter
+): void {
+	const classified = classifyQubitPairPath(param.path);
+	if (!classified) {
+		return;
+	}
+
+	const key = entryKey(classified);
+	let entry = entries.get(key);
+	if (!entry) {
+		entry = {
+			key,
+			kind: classified.kind,
+			category: classified.category,
+			operation: classified.operation,
+			parameter: classified.parameter,
+			byPair: {},
+		};
+		entries.set(key, entry);
+	}
+
+	entry.byPair[pairName] = { path: param.path, value: param.value };
+}
+
+function sortPairEntries(entries: PairCatalogEntry[]): PairCatalogEntry[] {
+	return [...entries].sort((a, b) => {
+		if (a.kind === 'qubitProperty' && b.kind !== 'qubitProperty') {
+			return -1;
+		}
+		if (b.kind === 'qubitProperty' && a.kind !== 'qubitProperty') {
+			return 1;
+		}
+		if (a.kind === 'qubitProperty' && b.kind === 'qubitProperty') {
+			return a.parameter.localeCompare(b.parameter);
+		}
+		const cat = a.category.localeCompare(b.category);
+		if (cat !== 0) {
+			return cat;
+		}
+		if (a.kind !== b.kind) {
+			return a.kind === 'direct' ? -1 : 1;
+		}
+		const opA = a.operation ?? '';
+		const opB = b.operation ?? '';
+		const op = opA.localeCompare(opB);
+		if (op !== 0) {
+			return op;
+		}
+		return a.parameter.localeCompare(b.parameter);
+	});
+}
+
+export function buildQubitPairCatalog(data: StateJson): QubitPairCatalog {
+	if (!data.qubit_pairs || typeof data.qubit_pairs !== 'object') {
+		return {
+			pairs: [],
+			entries: [],
+			pairPropertyCategory: PAIR_PROPERTY_CATEGORY,
+			pairPropertyCategoryLabel: PAIR_PROPERTY_CATEGORY_LABEL,
+		};
+	}
+
+	const pairNames = Object.keys(data.qubit_pairs).sort();
+	const entries = new Map<string, PairCatalogEntry>();
+
+	for (const pairName of pairNames) {
+		const params = scanQubitPairParameters(pairName, data.qubit_pairs[pairName]);
+		for (const param of params) {
+			mergePairParameter(entries, pairName, param);
+		}
+	}
+
+	return {
+		pairs: pairNames,
+		entries: sortPairEntries([...entries.values()]),
+		pairPropertyCategory: PAIR_PROPERTY_CATEGORY,
+		pairPropertyCategoryLabel: PAIR_PROPERTY_CATEGORY_LABEL,
+	};
+}
+
+export interface EditorCatalogPayload {
+	qubitCatalog: ParameterCatalog;
+	qubitPairCatalog: QubitPairCatalog;
 }

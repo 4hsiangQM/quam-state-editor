@@ -2,9 +2,14 @@ import * as vscode from 'vscode';
 import { applyParameterEdits } from '../apply.js';
 import {
 	buildParameterCatalog,
+	buildQubitPairCatalog,
 	QUBIT_PROPERTY_CATEGORY,
 	QUBIT_PROPERTY_CATEGORY_LABEL,
+	PAIR_PROPERTY_CATEGORY,
+	PAIR_PROPERTY_CATEGORY_LABEL,
+	type EditorCatalogPayload,
 	type ParameterCatalog,
+	type QubitPairCatalog,
 } from '../catalog.js';
 import {
 	formatStateFilePath,
@@ -13,7 +18,21 @@ import {
 	readStateFile,
 	type StateJson,
 } from '../stateFile.js';
-import type { HostToWebviewMessage, WebviewToHostMessage } from './protocol.js';
+import type { EditorTarget, HostToWebviewMessage, WebviewToHostMessage } from './protocol.js';
+
+const EMPTY_QUBIT_CATALOG: ParameterCatalog = {
+	qubits: [],
+	entries: [],
+	qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
+	qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
+};
+
+const EMPTY_PAIR_CATALOG: QubitPairCatalog = {
+	pairs: [],
+	entries: [],
+	pairPropertyCategory: PAIR_PROPERTY_CATEGORY,
+	pairPropertyCategoryLabel: PAIR_PROPERTY_CATEGORY_LABEL,
+};
 
 export class QuamStateEditorPanel {
 	public static readonly viewType = 'quamStateEditor';
@@ -30,12 +49,8 @@ export class QuamStateEditorPanel {
 
 	private data: StateJson = {};
 	private rawBytes: Uint8Array = new Uint8Array();
-	private catalog: ParameterCatalog = {
-		qubits: [],
-		entries: [],
-		qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
-		qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
-	};
+	private qubitCatalog: ParameterCatalog = EMPTY_QUBIT_CATALOG;
+	private qubitPairCatalog: QubitPairCatalog = EMPTY_PAIR_CATALOG;
 
 	private constructor(
 		panel: vscode.WebviewPanel,
@@ -132,10 +147,17 @@ export class QuamStateEditorPanel {
 		return formatStateFilePath(this.stateUri, this.workspaceFolder);
 	}
 
+	private catalogPayload(): EditorCatalogPayload {
+		return {
+			qubitCatalog: this.qubitCatalog,
+			qubitPairCatalog: this.qubitPairCatalog,
+		};
+	}
+
 	private postCatalog(): void {
 		this.postMessage({
 			type: 'catalog',
-			payload: this.catalog,
+			payload: this.catalogPayload(),
 			stateFilePath: this.stateFilePathLabel(),
 		});
 	}
@@ -146,23 +168,27 @@ export class QuamStateEditorPanel {
 			this.data = read.data;
 			this.rawBytes = read.rawBytes;
 
-			if (!this.data.qubits || typeof this.data.qubits !== 'object') {
+			this.qubitCatalog =
+				this.data.qubits && typeof this.data.qubits === 'object'
+					? buildParameterCatalog(this.data)
+					: EMPTY_QUBIT_CATALOG;
+
+			this.qubitPairCatalog =
+				this.data.qubit_pairs && typeof this.data.qubit_pairs === 'object'
+					? buildQubitPairCatalog(this.data)
+					: EMPTY_PAIR_CATALOG;
+
+			const hasQubits = this.qubitCatalog.qubits.length > 0;
+			const hasPairs = this.qubitPairCatalog.pairs.length > 0;
+
+			if (!hasQubits && !hasPairs) {
 				this.postMessage({
 					type: 'status',
-					message: `${this.stateFilePathLabel()}: no "qubits" object.`,
+					message: `${this.stateFilePathLabel()}: no "qubits" or "qubit_pairs" found.`,
 					level: 'error',
 				});
-				this.catalog = {
-					qubits: [],
-					entries: [],
-					qubitPropertyCategory: QUBIT_PROPERTY_CATEGORY,
-					qubitPropertyCategoryLabel: QUBIT_PROPERTY_CATEGORY_LABEL,
-				};
-				this.postCatalog();
-				return;
 			}
 
-			this.catalog = buildParameterCatalog(this.data);
 			this.postCatalog();
 		} catch (err) {
 			this.postMessage({
@@ -188,22 +214,29 @@ export class QuamStateEditorPanel {
 		}
 	}
 
+	private catalogForTarget(target: EditorTarget): ParameterCatalog | QubitPairCatalog {
+		return target === 'qubit_pairs' ? this.qubitPairCatalog : this.qubitCatalog;
+	}
+
 	private async handleApply(
 		message: Extract<WebviewToHostMessage, { type: 'apply' }>
 	): Promise<void> {
+		const catalog = this.catalogForTarget(message.target);
+
 		const { result, data, rawBytes } = await applyParameterEdits(
 			this.stateUri,
 			this.backupUri,
 			this.data,
 			this.rawBytes,
-			this.catalog,
+			catalog,
 			{ edits: message.edits }
 		);
 
 		if (result.ok) {
 			this.data = data;
 			this.rawBytes = rawBytes;
-			this.catalog = buildParameterCatalog(this.data);
+			this.qubitCatalog = buildParameterCatalog(this.data);
+			this.qubitPairCatalog = buildQubitPairCatalog(this.data);
 			this.postCatalog();
 			this.postMessage({ type: 'applyResult', ok: true, updatedLabels: result.updatedLabels });
 
@@ -247,9 +280,14 @@ export class QuamStateEditorPanel {
 		<p id="state-file" class="state-file"></p>
 	</header>
 
+	<nav class="domain-tabs" role="tablist" aria-label="Edit target">
+		<button type="button" class="domain-tab active" data-target="qubits" role="tab">Qubit</button>
+		<button type="button" class="domain-tab" data-target="qubit_pairs" role="tab">Qubit pair</button>
+	</nav>
+
 	<section class="field">
-		<label>Qubit</label>
-		<div id="qubit-list" class="qubit-list"></div>
+		<label id="entity-list-label">Qubits</label>
+		<div id="entity-list" class="entity-list"></div>
 	</section>
 
 	<section class="field">
@@ -277,11 +315,11 @@ export class QuamStateEditorPanel {
 
 	<section class="field">
 		<label>Values</label>
-		<p class="hint">Blank new value = do not change that qubit.</p>
+		<p id="values-hint" class="hint">Blank new value = do not change that qubit.</p>
 		<table id="value-table" class="value-table">
 			<thead>
 				<tr>
-					<th>Qubit</th>
+					<th id="value-col-entity">Qubit</th>
 					<th>Current</th>
 					<th>New</th>
 				</tr>

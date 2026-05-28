@@ -4,8 +4,8 @@ Edit numeric calibration parameters in QuAM `state.json` from **Cursor** or **VS
 
 ## Features
 
-- **Webview panel**: select qubits, category (including **Qubit property**), operations, and parameters
-- **Multi-qubit editing**: set a different new value per qubit in one apply (blank = skip that qubit)
+- **Webview panel**: select qubits or **qubit pairs**, category (including **Qubit property** / **Pair property**), operations, and parameters
+- **Multi-entity editing**: set a different new value per qubit or pair in one apply (blank = skip)
 - **Quick Pick** flow: step-by-step single-qubit edit
 - **Backup** before write: creates `<your-file>.json.bak` next to the file you edit
 - **Remember `state.json` path** per workspace folder
@@ -13,7 +13,7 @@ Edit numeric calibration parameters in QuAM `state.json` from **Cursor** or **VS
 ## Requirements
 
 - [Cursor](https://cursor.com/) or [VS Code](https://code.visualstudio.com/) (engine `^1.105.0`)
-- A `state.json` file with a top-level `qubits` object
+- A `state.json` file with a top-level `qubits` object and/or `qubit_pairs` object
 - **Node.js 18+** and **npm** — only needed to **build** the `.vsix` installer (not needed for daily use after install)
 
 ---
@@ -136,13 +136,24 @@ While the panel stays open, use **Reload** for the current file or **Change file
 
 ### 3. Edit parameters
 
+Use the **Qubit** or **Qubit pair** tab at the top of the panel.
+
+**Qubit tab**
+
 1. Check one or more **Qubits**.
 2. Choose **Category** (`xy`, `resonator`, `z`, or **Qubit property** for fields like `anharmonicity`).
 3. For category fields (not Qubit property): choose **Location** → **On category** or **In operation**, then **Parameter** (and **Operation** if needed).
-4. Enter **New value** per qubit in the table. **Leave blank to skip** that qubit.
+4. Enter **New value** per qubit. **Leave blank to skip** that qubit.
 5. Click **Apply** (creates `.bak` backup, then writes JSON).
-6. Click **Reload** to re-read the **same** file from disk after external edits.
-7. Click **Change file…** (or run **Select state.json**) to switch to a **different** `state.json`.
+
+**Qubit pair tab**
+
+Same flow for `qubit_pairs` (e.g. categories `coupler`, `gates`, `extras`, or **Pair property** for `J2`, `detuning`). Multi-select pairs is supported.
+
+**All tabs**
+
+- **Reload** re-reads the current file from disk.
+- **Change file…** switches to a different `state.json`.
 
 ### Other commands
 

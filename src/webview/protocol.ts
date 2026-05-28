@@ -1,4 +1,6 @@
-import type { ParameterCatalog } from '../catalog.js';
+import type { EditorCatalogPayload } from '../catalog.js';
+
+export type EditorTarget = 'qubits' | 'qubit_pairs';
 
 export type WebviewToHostMessage =
 	| { type: 'ready' }
@@ -6,17 +8,18 @@ export type WebviewToHostMessage =
 	| { type: 'changeStateFile' }
 	| {
 			type: 'apply';
+			target: EditorTarget;
 			entryKey: string;
-			edits: Array<{ qubit: string; path: string[]; newValue: string }>;
+			edits: Array<{ entity: string; path: string[]; newValue: string }>;
 	  };
 
 export type HostToWebviewMessage =
-	| { type: 'catalog'; payload: ParameterCatalog; stateFilePath: string }
+	| { type: 'catalog'; payload: EditorCatalogPayload; stateFilePath: string }
 	| {
 			type: 'applyResult';
 			ok: boolean;
 			message?: string;
-			errors?: Array<{ qubit: string; error: string }>;
+			errors?: Array<{ entity: string; error: string }>;
 			updatedLabels?: string[];
 	  }
 	| { type: 'status'; message: string; level?: 'info' | 'error' };
