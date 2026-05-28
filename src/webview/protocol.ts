@@ -3,6 +3,7 @@ import type { ParameterCatalog } from '../catalog.js';
 export type WebviewToHostMessage =
 	| { type: 'ready' }
 	| { type: 'reload' }
+	| { type: 'changeStateFile' }
 	| {
 			type: 'apply';
 			entryKey: string;

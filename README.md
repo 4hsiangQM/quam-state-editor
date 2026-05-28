@@ -130,28 +130,25 @@ Do **not** open only a single file — use **Open Folder**.
 | Command Palette | `Cmd` + `Shift` + `P` | `Ctrl` + `Shift` + `P` |
 | Run | **QuAM State Editor: Open Panel** | same |
 
-### 3. First time: choose `state.json`
+Each time you run **Open Panel** (or **Open Quick Pick**), a file dialog lets you choose which `state.json` to load. The dialog **defaults to the last file** you used in this workspace (press Enter to open the same file again, or pick another).
 
-A file dialog appears. Pick your `state.json` (e.g. `quam_state/state.json`).
+While the panel stays open, use **Reload** for the current file or **Change file…** to switch without closing the panel.
 
-The path is **remembered for this workspace**. To change it later:
-
-**QuAM State Editor: Select state.json**
-
-### 4. Edit parameters
+### 3. Edit parameters
 
 1. Check one or more **Qubits**.
 2. Choose **Category** (`xy`, `resonator`, `z`, or **Qubit property** for fields like `anharmonicity`).
 3. For category fields (not Qubit property): choose **Location** → **On category** or **In operation**, then **Parameter** (and **Operation** if needed).
 4. Enter **New value** per qubit in the table. **Leave blank to skip** that qubit.
 5. Click **Apply** (creates `.bak` backup, then writes JSON).
-6. Click **Reload** to re-read the file from disk after external edits.
+6. Click **Reload** to re-read the **same** file from disk after external edits.
+7. Click **Change file…** (or run **Select state.json**) to switch to a **different** `state.json`.
 
 ### Other commands
 
 | Command | Description |
 |---------|-------------|
-| **QuAM State Editor: Open Panel** | Main Webview UI |
+| **QuAM State Editor: Open Panel** | Main Webview UI (always prompts for `state.json`) |
 | **QuAM State Editor: Open (Quick Pick)** | Legacy one-qubit-at-a-time flow |
 | **QuAM State Editor: Select state.json** | Pick a different `state.json` for this workspace |
 
@@ -218,6 +215,7 @@ A second window opens with `[Extension Development Host]` in the title. That win
 | Category / Parameter resets | Update to latest build; re-install `.vsix` |
 | `cursor` / `code` not in PATH | Run **Shell Command: Install … command in PATH** from Command Palette |
 | Apply does nothing | Check all new values are valid numbers; one invalid value blocks the whole apply |
+| Stuck on one state.json | Run **Open Panel** again to pick a file, or use **Change file…** / **Select state.json** (Reload only refreshes the current file) |
 
 ---
 

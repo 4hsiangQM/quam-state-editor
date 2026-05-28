@@ -9,6 +9,7 @@ import {
 import {
 	formatStateFilePath,
 	getBackupUriForStateFile,
+	promptSelectStateFileUri,
 	readStateFile,
 	type StateJson,
 } from '../stateFile.js';
@@ -21,6 +22,7 @@ export class QuamStateEditorPanel {
 
 	private readonly panel: vscode.WebviewPanel;
 	private readonly extensionUri: vscode.Uri;
+	private readonly context: vscode.ExtensionContext;
 	private readonly workspaceFolder: vscode.WorkspaceFolder;
 
 	private stateUri: vscode.Uri;
@@ -38,11 +40,13 @@ export class QuamStateEditorPanel {
 	private constructor(
 		panel: vscode.WebviewPanel,
 		extensionUri: vscode.Uri,
+		context: vscode.ExtensionContext,
 		workspaceFolder: vscode.WorkspaceFolder,
 		stateUri: vscode.Uri
 	) {
 		this.panel = panel;
 		this.extensionUri = extensionUri;
+		this.context = context;
 		this.workspaceFolder = workspaceFolder;
 		this.stateUri = stateUri;
 		this.backupUri = getBackupUriForStateFile(stateUri);
@@ -60,6 +64,7 @@ export class QuamStateEditorPanel {
 
 	public static async createOrShow(
 		extensionUri: vscode.Uri,
+		context: vscode.ExtensionContext,
 		workspaceFolder: vscode.WorkspaceFolder,
 		stateUri: vscode.Uri
 	): Promise<void> {
@@ -86,13 +91,32 @@ export class QuamStateEditorPanel {
 		QuamStateEditorPanel.currentPanel = new QuamStateEditorPanel(
 			panel,
 			extensionUri,
+			context,
 			workspaceFolder,
 			stateUri
 		);
 	}
 
+	public async changeStateFile(): Promise<void> {
+		const picked = await promptSelectStateFileUri(
+			this.context,
+			this.workspaceFolder,
+			this.stateUri
+		);
+		if (!picked) {
+			return;
+		}
+		this.setStateFile(picked);
+		await this.reloadCatalog();
+		vscode.window.showInformationMessage(`Now editing: ${this.stateFilePathLabel()}`);
+	}
+
 	public static getCurrentPanel(): QuamStateEditorPanel | undefined {
 		return QuamStateEditorPanel.currentPanel;
+	}
+
+	public getStateFileUri(): vscode.Uri {
+		return this.stateUri;
 	}
 
 	public setStateFile(stateUri: vscode.Uri): void {
@@ -154,6 +178,9 @@ export class QuamStateEditorPanel {
 			case 'ready':
 			case 'reload':
 				await this.reloadCatalog();
+				break;
+			case 'changeStateFile':
+				await this.changeStateFile();
 				break;
 			case 'apply':
 				await this.handleApply(message);
@@ -265,7 +292,8 @@ export class QuamStateEditorPanel {
 
 	<footer class="actions">
 		<button id="apply" type="button" disabled>Apply</button>
-		<button id="reload" type="button">Reload</button>
+		<button id="reload" type="button" class="secondary">Reload</button>
+		<button id="change-file" type="button" class="secondary">Change file…</button>
 	</footer>
 
 	<script nonce="${nonce}" src="${scriptUri}"></script>

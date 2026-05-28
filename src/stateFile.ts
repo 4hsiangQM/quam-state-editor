@@ -52,13 +52,28 @@ async function saveStateFileUri(
 	await context.workspaceState.update(workspaceStorageKey(workspaceFolder), stateUri.toString());
 }
 
+export function getWorkspaceStateFileUri(
+	context: vscode.ExtensionContext,
+	workspaceFolder: vscode.WorkspaceFolder
+): vscode.Uri | undefined {
+	return getSavedStateFileUri(context, workspaceFolder);
+}
+
 /** Ask the user to pick state.json and remember it for this workspace. */
 export async function promptSelectStateFileUri(
 	context: vscode.ExtensionContext,
-	workspaceFolder: vscode.WorkspaceFolder
+	workspaceFolder: vscode.WorkspaceFolder,
+	suggestedUri?: vscode.Uri
 ): Promise<vscode.Uri | undefined> {
-	const defaultUri = getDefaultStateFileUri(workspaceFolder);
-	const dialogDefault = (await uriExists(defaultUri)) ? defaultUri : workspaceFolder.uri;
+	let dialogDefault = workspaceFolder.uri;
+	if (suggestedUri && (await uriExists(suggestedUri))) {
+		dialogDefault = suggestedUri;
+	} else {
+		const defaultUri = getDefaultStateFileUri(workspaceFolder);
+		if (await uriExists(defaultUri)) {
+			dialogDefault = defaultUri;
+		}
+	}
 
 	const picked = await vscode.window.showOpenDialog({
 		title: 'Select state.json',

@@ -4,9 +4,9 @@ import { buildParameterCatalog } from './catalog.js';
 import { scanNumericParameters } from './parameterIndex.js';
 import {
 	getBackupUriForStateFile,
+	getWorkspaceStateFileUri,
 	promptSelectStateFileUri,
 	readStateFile,
-	resolveStateFileUri,
 } from './stateFile.js';
 import { parseFiniteNumber } from './validation.js';
 import { QuamStateEditorPanel } from './webview/panel.js';
@@ -16,13 +16,15 @@ async function openWithStateFile(
 	folder: vscode.WorkspaceFolder,
 	openPanel: boolean
 ): Promise<void> {
-	const stateUri = await resolveStateFileUri(context, folder);
+	// Always ask which state.json to open; dialog defaults to the last file for this workspace.
+	const lastUri = getWorkspaceStateFileUri(context, folder);
+	const stateUri = await promptSelectStateFileUri(context, folder, lastUri);
 	if (!stateUri) {
 		return;
 	}
 
 	if (openPanel) {
-		await QuamStateEditorPanel.createOrShow(context.extensionUri, folder, stateUri);
+		await QuamStateEditorPanel.createOrShow(context.extensionUri, context, folder, stateUri);
 	} else {
 		await runQuickPickFlow(folder, stateUri);
 	}
@@ -150,16 +152,17 @@ export function activate(context: vscode.ExtensionContext) {
 				vscode.window.showErrorMessage('Open a folder in the workspace first.');
 				return;
 			}
-			const stateUri = await promptSelectStateFileUri(context, folder);
+			const panel = QuamStateEditorPanel.getCurrentPanel();
+			const currentUri = panel?.getStateFileUri();
+			const stateUri = await promptSelectStateFileUri(context, folder, currentUri);
 			if (!stateUri) {
 				return;
 			}
-			const panel = QuamStateEditorPanel.getCurrentPanel();
 			if (panel) {
 				panel.setStateFile(stateUri);
 				await panel.reloadCatalog();
 			} else {
-				vscode.window.showInformationMessage(`Using state file: ${stateUri.fsPath}`);
+				await QuamStateEditorPanel.createOrShow(context.extensionUri, context, folder, stateUri);
 			}
 		})
 	);

@@ -33,6 +33,7 @@
 	const valueBody = document.getElementById('value-body');
 	const applyBtn = /** @type {HTMLButtonElement} */ (document.getElementById('apply'));
 	const reloadBtn = /** @type {HTMLButtonElement} */ (document.getElementById('reload'));
+	const changeFileBtn = /** @type {HTMLButtonElement} */ (document.getElementById('change-file'));
 
 	function setStatus(text, isError) {
 		statusEl.textContent = text;
@@ -294,11 +295,23 @@
 		renderValueTable();
 	}
 
+	function resetCatalogUi() {
+		categoryEl.value = '';
+		parameterEl.value = '';
+		operationEl.value = '';
+		const directRadio = document.querySelector('input[name=location][value=direct]');
+		if (directRadio instanceof HTMLInputElement) {
+			directRadio.checked = true;
+		}
+		valueBody.innerHTML = '';
+	}
+
 	function onCatalog(message) {
 		catalog = message.payload;
 		if (stateFileEl && message.stateFilePath) {
 			stateFileEl.textContent = `File: ${message.stateFilePath}`;
 		}
+		resetCatalogUi();
 		renderQubits();
 		setStatus(
 			catalog.qubits.length === 0
@@ -337,6 +350,11 @@
 	reloadBtn.addEventListener('click', () => {
 		setStatus('Reloading…');
 		vscode.postMessage({ type: 'reload' });
+	});
+
+	changeFileBtn.addEventListener('click', () => {
+		setStatus('Choose another state.json…');
+		vscode.postMessage({ type: 'changeStateFile' });
 	});
 
 	document.querySelectorAll('input[name=location]').forEach((el) => {
