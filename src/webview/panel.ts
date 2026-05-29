@@ -298,8 +298,8 @@ export class QuamStateEditorPanel {
 	<section class="field" id="location-section">
 		<span class="label">Location</span>
 		<div class="radio-row">
-			<label><input type="radio" name="location" value="direct" checked /> On category</label>
-			<label><input type="radio" name="location" value="operation" /> In operation</label>
+			<label id="location-direct-label"><input type="radio" name="location" value="direct" checked /> General</label>
+			<label id="location-operation-label"><input type="radio" name="location" value="operation" /> Operations</label>
 		</div>
 	</section>
 

@@ -57,6 +57,8 @@
 	const entityListEl = document.getElementById('entity-list');
 	const categoryEl = /** @type {HTMLSelectElement} */ (document.getElementById('category'));
 	const locationSection = document.getElementById('location-section');
+	const locationDirectLabel = document.getElementById('location-direct-label');
+	const locationOperationLabel = document.getElementById('location-operation-label');
 	const operationSection = document.getElementById('operation-section');
 	const operationEl = /** @type {HTMLSelectElement} */ (document.getElementById('operation'));
 	const parameterEl = /** @type {HTMLSelectElement} */ (document.getElementById('parameter'));
@@ -362,14 +364,67 @@
 		}
 	}
 
+	/** @param {'direct' | 'operation'} locationKind @param {string[]} selectedEntities */
+	function categoryEntriesForLocationKind(locationKind, selectedEntities) {
+		const category = categoryEl.value;
+		if (!category || isPropertyCategory() || selectedEntities.length === 0) {
+			return [];
+		}
+
+		return activeCatalog().entries.filter((entry) => {
+			if (entry.kind === 'qubitProperty' || entry.category !== category) {
+				return false;
+			}
+			if (locationKind === 'direct') {
+				if (entry.kind !== 'direct' && entry.kind !== 'matrix' && entry.kind !== 'array') {
+					return false;
+				}
+			} else if (entry.kind !== 'operation') {
+				return false;
+			}
+			return selectedEntities.every((name) => slotForEntry(entry, name));
+		});
+	}
+
+	function setLocationKind(kind) {
+		const radio = document.querySelector(`input[name=location][value=${kind}]`);
+		if (radio instanceof HTMLInputElement) {
+			radio.checked = true;
+		}
+	}
+
 	function syncLocationSection() {
 		const isProperty = isPropertyCategory();
-		locationSection.classList.toggle('hidden', isProperty);
 		if (isProperty) {
+			locationSection.classList.add('hidden');
 			operationSection.classList.add('hidden');
-		} else {
-			operationSection.classList.toggle('hidden', getLocationKind() !== 'operation');
+			return;
 		}
+
+		const selected = getSelectedEntities();
+		const hasDirect = categoryEntriesForLocationKind('direct', selected).length > 0;
+		const hasOperation = categoryEntriesForLocationKind('operation', selected).length > 0;
+
+		locationDirectLabel?.classList.toggle('hidden', !hasDirect);
+		locationOperationLabel?.classList.toggle('hidden', !hasOperation);
+
+		const currentKind = getLocationKind();
+		if (currentKind === 'direct' && !hasDirect && hasOperation) {
+			setLocationKind('operation');
+		} else if (currentKind === 'operation' && !hasOperation && hasDirect) {
+			setLocationKind('direct');
+		} else if (!hasDirect && hasOperation) {
+			setLocationKind('operation');
+		} else if (hasDirect && !hasOperation) {
+			setLocationKind('direct');
+		}
+
+		const showLocationChoice = hasDirect && hasOperation;
+		locationSection.classList.toggle('hidden', !showLocationChoice);
+		operationSection.classList.toggle(
+			'hidden',
+			getLocationKind() !== 'operation' || !hasOperation
+		);
 	}
 
 	function refreshParameterUi() {

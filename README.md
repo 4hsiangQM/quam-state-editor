@@ -58,6 +58,8 @@ npm run compile
 npx @vscode/vsce package --allow-missing-repository
 ```
 
+After `npm install`, you may see something like `4 vulnerabilities (2 low, 1 moderate, 1 high)`. **You can ignore this and continue** — those warnings come from dev/test dependencies, not from the code that goes into the `.vsix`. Do **not** run `npm audit fix --force` unless you know you need it; just proceed with `npm run compile` and packaging.
+
 When it succeeds, you get:
 
 ```text
@@ -68,17 +70,13 @@ in the project folder.
 
 | Item | Note |
 |------|------|
-| `npm audit` warnings | Safe to ignore for local dev; they are in test tools, not the shipped extension |
+| `npm audit` / vulnerabilities after `npm install` | Safe to ignore — continue with compile and package; do not run `npm audit fix --force` unless you intend to upgrade dev deps |
 | `LICENSE` warning | Fixed if `LICENSE` exists in the repo |
 | `publisher` in `package.json` | Must be an ID like `jackchao`, not a display name with spaces |
 
 ---
 
 ## Part 2 — Install into Cursor
-
-You only need **one** of the methods below.
-
-### Method A — Command Palette (Mac & Windows)
 
 | | macOS | Windows |
 |---|--------|---------|
@@ -94,40 +92,7 @@ Reload the window:
 |---|--------|---------|
 | Reload | `Cmd` + `Shift` + `P` → **Developer: Reload Window** | `Ctrl` + `Shift` + `P` → **Developer: Reload Window** |
 
-> **Tip:** If you do not see **Install from VSIX** in the Extensions panel menu (`⋯`), use Command Palette or Method B/C instead. Newer Cursor builds often hide that menu item.
-
-### Method B — Drag and drop (Mac & Windows)
-
-1. Open the **Extensions** sidebar.
-2. Drag `quam-state-editor-0.0.1.vsix` from Finder (Mac) or File Explorer (Windows) into the Extensions panel.
-3. Confirm installation, then **Reload Window** (see table above).
-
-### Method C — Terminal / CLI (Mac & Windows)
-
-**macOS**
-
-```bash
-# Optional: enable the cursor command (once)
-# In Cursor: Cmd+Shift+P → "Shell Command: Install 'cursor' command in PATH"
-
-cursor --install-extension /full/path/to/quam-state-editor-0.0.1.vsix
-```
-
-Example:
-
-```bash
-cursor --install-extension ~/dev/quam-state-editor/quam-state-editor-0.0.1.vsix
-```
-
-**Windows (PowerShell or Command Prompt)**
-
-```powershell
-cursor --install-extension C:\Users\YOU\dev\quam-state-editor\quam-state-editor-0.0.1.vsix
-```
-
-Use your real path. If `cursor` is not found, install the shell command from Cursor (`Ctrl+Shift+P` → **Shell Command: Install 'cursor' command in PATH**), then open a **new** terminal.
-
-After install, restart Cursor or run **Developer: Reload Window**.
+> **Tip:** If you do not see **Install from VSIX** in the Extensions panel menu (`⋯`), use the Command Palette instead. Newer Cursor builds often hide that menu item.
 
 ### Verify installation
 
@@ -136,28 +101,6 @@ After install, restart Cursor or run **Developer: Reload Window**.
 3. It should appear as installed (publisher: `jackchao`).
 
 ---
-
-## Part 3 — Use the extension (Mac & Windows)
-
-### 1. Open your experiment project
-
-| | macOS | Windows |
-|---|--------|---------|
-| Open folder | **File → Open Folder…** | same |
-
-Open the folder that contains (or is near) your `state.json`.  
-Do **not** open only a single file — use **Open Folder**.
-
-### 2. Open the editor panel
-
-| | macOS | Windows |
-|---|--------|---------|
-| Command Palette | `Cmd` + `Shift` + `P` | `Ctrl` + `Shift` + `P` |
-| Run | **QuAM State Editor: Open Panel** | same |
-
-Each time you run **Open Panel** (or **Open Quick Pick**), a file dialog lets you choose which `state.json` to load. The dialog **defaults to the last file** you used in this workspace (press Enter to open the same file again, or pick another).
-
-While the panel stays open, use **Reload** for the current file or **Change file…** to switch without closing the panel.
 
 ## Update after code changes
 
@@ -171,9 +114,6 @@ While the panel stays open, use **Reload** for the current file or **Change file
 
 3. Install the new `.vsix` again (overwrites the old version).
 4. Reload Cursor / VS Code.
-
----
-
 
 ## License
 
