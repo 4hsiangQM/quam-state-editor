@@ -4,7 +4,8 @@ Edit numeric calibration parameters in QuAM `state.json` from **Cursor** or **VS
 
 ## Features
 
-- **Webview panel**: select qubits or **qubit pairs**, category (including **Qubit property** / **Pair property**), operations, and parameters
+- **Webview panel**: select qubits or **qubit pairs**, category (including **Qubit property** / **Pair property**), **General** / **Operations** / **Port** location, and parameters
+- **Port location**: resolve channel → hardware port via sibling `wiring.json` (read-only); edit port calibration fields in `state.json` (`delay`, `full_scale_power_dbm`, `exponential_filter`, etc.)
 - **Multi-entity editing**: set a different new value per qubit or pair in one apply (blank = skip)
 - **JSON arrays**: qubit `confusion_matrix` / `gef_confusion_matrix`; pair `flux_values` / `J_vs_flux` — edit as JSON in the Values table
 - **1D scalars**: `filter_fir_taps`, `filter_iir_taps` shown as `field[i]`
@@ -17,6 +18,7 @@ Edit numeric calibration parameters in QuAM `state.json` from **Cursor** or **VS
 
 - [Cursor](https://cursor.com/) or [VS Code](https://code.visualstudio.com/) (engine `^1.105.0`)
 - A `state.json` file with a top-level `qubits` object and/or `qubit_pairs` object
+- For **Port** location: `wiring.json` in the same folder as `state.json` (e.g. `quam_state/wiring.json`)
 - **Node.js 18+** and **npm** — only needed to **build** the `.vsix` installer (not needed for daily use after install)
 
 ---

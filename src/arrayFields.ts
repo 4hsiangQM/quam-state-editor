@@ -1,3 +1,16 @@
+/** Port 2D arrays edited as whole JSON in the webview. */
+export const PORT_MATRIX_FIELD_NAMES = new Set(['exponential_filter']);
+
+/** Fields skipped when scanning port objects (identity / enum-like). */
+export const PORT_SKIP_FIELD_NAMES = new Set([
+	'controller_id',
+	'fem_id',
+	'port_id',
+	'band',
+	'upsampling_mode',
+	'output_mode',
+]);
+
 /** Qubit resonator matrices edited as whole JSON in the webview. */
 export const QUBIT_MATRIX_FIELD_NAMES = new Set(['confusion_matrix', 'gef_confusion_matrix']);
 

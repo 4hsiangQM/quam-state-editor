@@ -45,6 +45,8 @@
 			pairPropertyCategory: '__pair_property__',
 			pairPropertyCategoryLabel: 'Pair property',
 		},
+		wiringAvailable: false,
+		wiringFilePath: undefined,
 	};
 
 	/** @type {EditorTarget} */
@@ -59,6 +61,11 @@
 	const locationSection = document.getElementById('location-section');
 	const locationDirectLabel = document.getElementById('location-direct-label');
 	const locationOperationLabel = document.getElementById('location-operation-label');
+	const locationPortLabel = document.getElementById('location-port-label');
+	const portSection = document.getElementById('port-section');
+	const portBreadcrumbEl = document.getElementById('port-breadcrumb');
+	const portChannelEl = /** @type {HTMLSelectElement} */ (document.getElementById('port-channel'));
+	const portChannelField = document.getElementById('port-channel-field');
 	const operationSection = document.getElementById('operation-section');
 	const operationEl = /** @type {HTMLSelectElement} */ (document.getElementById('operation'));
 	const parameterEl = /** @type {HTMLSelectElement} */ (document.getElementById('parameter'));
@@ -116,6 +123,18 @@
 		return checked ? /** @type {HTMLInputElement} */ (checked).value : 'direct';
 	}
 
+	function isPortLocation() {
+		return getLocationKind() === 'port';
+	}
+
+	function getSelectedOpxKey() {
+		return portChannelEl?.value ?? '';
+	}
+
+	function portPathKey(slot) {
+		return slot.path.join('\0');
+	}
+
 	function isJsonBlobKind(valueKind) {
 		return valueKind === 'matrix' || valueKind === 'array';
 	}
@@ -150,6 +169,19 @@
 		const kind = getLocationKind();
 		return activeCatalog().entries.filter((entry) => {
 			if (entry.kind === 'qubitProperty' || entry.category !== category) {
+				return false;
+			}
+			if (kind === 'port') {
+				if (entry.kind !== 'port') {
+					return false;
+				}
+				const opxKey = getSelectedOpxKey();
+				if (opxKey && entry.opxKey !== opxKey) {
+					return false;
+				}
+				return selectedEntities.some((name) => slotForEntry(entry, name));
+			}
+			if (entry.kind === 'port') {
 				return false;
 			}
 			if (entry.kind === 'matrix' || entry.kind === 'array') {
@@ -203,9 +235,19 @@
 			}
 			if (entry.kind === 'qubitProperty') {
 				hasProperty = true;
-			} else {
+			} else if (entry.kind !== 'port') {
 				categories.add(entry.category);
 			}
+		}
+
+		for (const entry of activeCatalog().entries) {
+			if (entry.kind !== 'port') {
+				continue;
+			}
+			if (selected.length > 0 && !selected.some((name) => slotForEntry(entry, name))) {
+				continue;
+			}
+			categories.add(entry.category);
 		}
 
 		/** @type {Array<{ value: string, label: string }>} */
@@ -256,6 +298,14 @@
 				return;
 			}
 			entries = entries.filter((e) => e.operation === op);
+		}
+
+		if (isPortLocation()) {
+			const opxKey = getSelectedOpxKey();
+			if (!opxKey) {
+				fillSelect(parameterEl, [], 'Select port channel first');
+				return;
+			}
 		}
 
 		fillSelect(
@@ -309,62 +359,207 @@
 		const missingLabel =
 			activeTarget === 'qubit_pairs' ? 'Not available for this pair' : 'Not available for this qubit';
 
-		for (const entityName of selected) {
-			const tr = document.createElement('tr');
-			const slot = slotForEntry(entry, entityName);
+		/** @type {Array<{ entityLabel: string, primaryEntity: string, slot: object | null }>} */
+		const rows = [];
 
-			const tdEntity = document.createElement('td');
-			tdEntity.textContent = entityName;
-			tr.appendChild(tdEntity);
-
-			const tdCurrent = document.createElement('td');
-			const tdNew = document.createElement('td');
-
-			if (!slot) {
-				tdCurrent.colSpan = 2;
-				tdCurrent.className = 'missing';
-				tdCurrent.textContent = missingLabel;
-				tr.appendChild(tdCurrent);
-			} else {
-				const currentText = formatCurrentValue(slot);
-				tdCurrent.textContent = isJsonBlobKind(slot.valueKind)
-					? truncateDisplay(currentText, 80)
-					: currentText;
-				if (isJsonBlobKind(slot.valueKind)) {
-					tdCurrent.title = currentText;
+		if (entry.kind === 'port') {
+			/** @type {Map<string, { slot: object, entities: string[] }>} */
+			const groups = new Map();
+			for (const entityName of selected) {
+				const slot = slotForEntry(entry, entityName);
+				if (!slot) {
+					rows.push({ entityLabel: entityName, primaryEntity: entityName, slot: null });
+					continue;
 				}
-
-				if (isJsonBlobKind(slot.valueKind)) {
-					const textarea = document.createElement('textarea');
-					textarea.rows = 5;
-					textarea.dataset.entity = entityName;
-					textarea.dataset.valueKind = slot.valueKind;
-					textarea.placeholder = 'Paste JSON array; leave blank to skip';
-					textarea.className = 'matrix-input';
-					if (pendingNewValues.has(entityName)) {
-						textarea.value = pendingNewValues.get(entityName) ?? '';
-					}
-					tdNew.appendChild(textarea);
+				const key = portPathKey(slot);
+				const existing = groups.get(key);
+				if (existing) {
+					existing.entities.push(entityName);
 				} else {
-					const input = document.createElement('input');
-					input.type = 'text';
-					input.dataset.entity = entityName;
-					input.dataset.valueKind = 'number';
-					input.placeholder = 'leave blank to skip';
-					if (pendingNewValues.has(entityName)) {
-						input.value = pendingNewValues.get(entityName) ?? '';
-					}
-					tdNew.appendChild(input);
+					groups.set(key, { slot, entities: [entityName] });
 				}
-				tr.appendChild(tdCurrent);
-				tr.appendChild(tdNew);
 			}
+			for (const group of groups.values()) {
+				const entityLabel =
+					group.entities.length > 1 ? group.entities.join(', ') : group.entities[0];
+				rows.push({
+					entityLabel,
+					primaryEntity: group.entities[0],
+					slot: group.slot,
+				});
+			}
+			for (const row of rows) {
+				appendValueRow(row.entityLabel, row.primaryEntity, row.slot, missingLabel, pendingNewValues);
+			}
+			return;
+		}
 
-			valueBody.appendChild(tr);
+		for (const entityName of selected) {
+			appendValueRow(
+				entityName,
+				entityName,
+				slotForEntry(entry, entityName),
+				missingLabel,
+				pendingNewValues
+			);
 		}
 	}
 
-	/** @param {'direct' | 'operation'} locationKind @param {string[]} selectedEntities */
+	function appendValueRow(entityLabel, primaryEntity, slot, missingLabel, pendingNewValues) {
+		const tr = document.createElement('tr');
+
+		const tdEntity = document.createElement('td');
+		tdEntity.textContent = entityLabel;
+		tr.appendChild(tdEntity);
+
+		const tdCurrent = document.createElement('td');
+		const tdNew = document.createElement('td');
+
+		if (!slot) {
+			tdCurrent.colSpan = 2;
+			tdCurrent.className = 'missing';
+			tdCurrent.textContent = missingLabel;
+			tr.appendChild(tdCurrent);
+		} else {
+			const currentText = formatCurrentValue(slot);
+			tdCurrent.textContent = isJsonBlobKind(slot.valueKind)
+				? truncateDisplay(currentText, 80)
+				: currentText;
+			if (isJsonBlobKind(slot.valueKind)) {
+				tdCurrent.title = currentText;
+			}
+
+			if (isJsonBlobKind(slot.valueKind)) {
+				const textarea = document.createElement('textarea');
+				textarea.rows = 5;
+				textarea.dataset.entity = primaryEntity;
+				textarea.dataset.valueKind = slot.valueKind;
+				textarea.placeholder = 'Paste JSON array; leave blank to skip';
+				textarea.className = 'matrix-input';
+				if (pendingNewValues.has(primaryEntity)) {
+					textarea.value = pendingNewValues.get(primaryEntity) ?? '';
+				}
+				tdNew.appendChild(textarea);
+			} else {
+				const input = document.createElement('input');
+				input.type = 'text';
+				input.dataset.entity = primaryEntity;
+				input.dataset.valueKind = 'number';
+				input.placeholder = 'leave blank to skip';
+				if (pendingNewValues.has(primaryEntity)) {
+					input.value = pendingNewValues.get(primaryEntity) ?? '';
+				}
+				tdNew.appendChild(input);
+			}
+			tr.appendChild(tdCurrent);
+			tr.appendChild(tdNew);
+		}
+
+		valueBody.appendChild(tr);
+	}
+
+	function portObjectPathLabel(path) {
+		if (!path || path[0] !== 'ports') {
+			return path?.join('/') ?? '';
+		}
+		if (path.length >= 5) {
+			return path.slice(1, 5).join('/');
+		}
+		return path.slice(1).join('/');
+	}
+
+	function getPortPathLabelForEntity(entityName, category, opxKey) {
+		for (const entry of activeCatalog().entries) {
+			if (entry.kind !== 'port' || entry.category !== category || entry.opxKey !== opxKey) {
+				continue;
+			}
+			const slot = slotForEntry(entry, entityName);
+			if (!slot?.path || slot.path[0] !== 'ports') {
+				continue;
+			}
+			return portObjectPathLabel(slot.path);
+		}
+		return undefined;
+	}
+
+	function updatePortChannelSelector() {
+		if (!portChannelEl) {
+			return;
+		}
+		const previous = portChannelEl.value;
+		if (!isPortLocation() || isPropertyCategory()) {
+			fillSelect(portChannelEl, [], '—');
+			if (portChannelField) {
+				portChannelField.classList.add('hidden');
+			}
+			return;
+		}
+
+		const selected = getSelectedEntities();
+		const category = categoryEl.value;
+		if (!category || selected.length === 0) {
+			fillSelect(portChannelEl, [], '—');
+			if (portChannelField) {
+				portChannelField.classList.add('hidden');
+			}
+			return;
+		}
+
+		const opxKeys = new Set();
+		for (const entry of activeCatalog().entries) {
+			if (entry.kind !== 'port' || entry.category !== category || !entry.opxKey) {
+				continue;
+			}
+			if (!selected.some((name) => slotForEntry(entry, name))) {
+				continue;
+			}
+			opxKeys.add(entry.opxKey);
+		}
+
+		const options = [...opxKeys].sort().map((key) => ({ value: key, label: key }));
+		fillSelect(portChannelEl, options, 'Select port channel');
+		if (previous && options.some((o) => o.value === previous)) {
+			portChannelEl.value = previous;
+		} else if (options.length > 0) {
+			portChannelEl.value = options[0].value;
+		} else {
+			portChannelEl.value = '';
+		}
+
+		if (portChannelField) {
+			portChannelField.classList.toggle('hidden', options.length <= 1);
+		}
+	}
+
+	function updatePortBreadcrumb() {
+		if (!portBreadcrumbEl || !portSection) {
+			return;
+		}
+		if (!isPortLocation() || isPropertyCategory()) {
+			portBreadcrumbEl.textContent = '';
+			return;
+		}
+
+		const selected = getSelectedEntities();
+		const category = categoryEl.value;
+		const opxKey = getSelectedOpxKey();
+		if (!category || !opxKey || selected.length === 0) {
+			portBreadcrumbEl.textContent = '';
+			return;
+		}
+
+		const lines = [];
+		for (const entityName of [...selected].sort()) {
+			const portPathLabel = getPortPathLabelForEntity(entityName, category, opxKey);
+			if (portPathLabel) {
+				lines.push(`${entityName} ${category} ${opxKey} → ${portPathLabel}`);
+			}
+		}
+
+		portBreadcrumbEl.textContent = lines.join('\n');
+	}
+
+	/** @param {'direct' | 'operation' | 'port'} locationKind @param {string[]} selectedEntities */
 	function categoryEntriesForLocationKind(locationKind, selectedEntities) {
 		const category = categoryEl.value;
 		if (!category || isPropertyCategory() || selectedEntities.length === 0) {
@@ -373,6 +568,15 @@
 
 		return activeCatalog().entries.filter((entry) => {
 			if (entry.kind === 'qubitProperty' || entry.category !== category) {
+				return false;
+			}
+			if (locationKind === 'port') {
+				if (entry.kind !== 'port') {
+					return false;
+				}
+				return selectedEntities.some((name) => slotForEntry(entry, name));
+			}
+			if (entry.kind === 'port') {
 				return false;
 			}
 			if (locationKind === 'direct') {
@@ -396,39 +600,52 @@
 	function syncLocationSection() {
 		const isProperty = isPropertyCategory();
 		if (isProperty) {
-			locationSection.classList.add('hidden');
-			operationSection.classList.add('hidden');
+			locationSection?.classList.add('hidden');
+			operationSection?.classList.add('hidden');
+			portSection?.classList.add('hidden');
 			return;
 		}
 
 		const selected = getSelectedEntities();
 		const hasDirect = categoryEntriesForLocationKind('direct', selected).length > 0;
 		const hasOperation = categoryEntriesForLocationKind('operation', selected).length > 0;
+		const hasPort =
+			payload.wiringAvailable && categoryEntriesForLocationKind('port', selected).length > 0;
 
 		locationDirectLabel?.classList.toggle('hidden', !hasDirect);
 		locationOperationLabel?.classList.toggle('hidden', !hasOperation);
+		locationPortLabel?.classList.toggle('hidden', !hasPort);
 
-		const currentKind = getLocationKind();
-		if (currentKind === 'direct' && !hasDirect && hasOperation) {
-			setLocationKind('operation');
-		} else if (currentKind === 'operation' && !hasOperation && hasDirect) {
-			setLocationKind('direct');
-		} else if (!hasDirect && hasOperation) {
-			setLocationKind('operation');
-		} else if (hasDirect && !hasOperation) {
-			setLocationKind('direct');
+		const availableKinds = [];
+		if (hasDirect) {
+			availableKinds.push('direct');
+		}
+		if (hasOperation) {
+			availableKinds.push('operation');
+		}
+		if (hasPort) {
+			availableKinds.push('port');
 		}
 
-		const showLocationChoice = hasDirect && hasOperation;
-		locationSection.classList.toggle('hidden', !showLocationChoice);
-		operationSection.classList.toggle(
+		const currentKind = getLocationKind();
+		if (!availableKinds.includes(currentKind) && availableKinds.length > 0) {
+			setLocationKind(availableKinds[0]);
+		}
+
+		const showLocationChoice = availableKinds.length > 1;
+		locationSection?.classList.toggle('hidden', availableKinds.length === 0 || !showLocationChoice);
+
+		operationSection?.classList.toggle(
 			'hidden',
 			getLocationKind() !== 'operation' || !hasOperation
 		);
+		portSection?.classList.toggle('hidden', getLocationKind() !== 'port' || !hasPort);
 	}
 
 	function refreshParameterUi() {
 		syncLocationSection();
+		updatePortChannelSelector();
+		updatePortBreadcrumb();
 		updateOperations();
 		updateParameters();
 		renderValueTable();
@@ -447,7 +664,15 @@
 	function onCategoryChanged() {
 		parameterEl.value = '';
 		syncLocationSection();
+		updatePortChannelSelector();
+		updatePortBreadcrumb();
 		updateOperations();
+		updateParameters();
+		renderValueTable();
+	}
+
+	function onPortChannelChanged() {
+		updatePortBreadcrumb();
 		updateParameters();
 		renderValueTable();
 	}
@@ -509,7 +734,13 @@
 		if (q === 0 && p === 0) {
 			return 'No qubits or qubit pairs in state.json.';
 		}
-		return `Loaded ${q} qubit(s), ${p} pair(s).`;
+		let message = `Loaded ${q} qubit(s), ${p} pair(s).`;
+		if (!payload.wiringAvailable) {
+			message += ' wiring.json not found — Port location unavailable.';
+		} else if (payload.wiringFilePath) {
+			message += ` Wiring: ${payload.wiringFilePath}.`;
+		}
+		return message;
 	}
 
 	function onCatalog(message) {
@@ -590,6 +821,7 @@
 	});
 	categoryEl.addEventListener('change', onCategoryChanged);
 	operationEl.addEventListener('change', onOperationChanged);
+	portChannelEl?.addEventListener('change', onPortChannelChanged);
 	parameterEl.addEventListener('change', renderValueTable);
 
 	window.addEventListener('message', (event) => {

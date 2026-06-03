@@ -11,6 +11,7 @@ import {
 	type ParameterCatalog,
 	type QubitPairCatalog,
 } from '../catalog.js';
+import { buildPairPortCatalogEntries, buildQubitPortCatalogEntries } from '../portCatalog.js';
 import {
 	formatStateFilePath,
 	getBackupUriForStateFile,
@@ -18,6 +19,11 @@ import {
 	readStateFile,
 	type StateJson,
 } from '../stateFile.js';
+import {
+	formatWiringFilePath,
+	readWiringFile,
+	wiringFileExists,
+} from '../wiringFile.js';
 import type { EditorTarget, HostToWebviewMessage, WebviewToHostMessage } from './protocol.js';
 
 const EMPTY_QUBIT_CATALOG: ParameterCatalog = {
@@ -51,6 +57,8 @@ export class QuamStateEditorPanel {
 	private rawBytes: Uint8Array = new Uint8Array();
 	private qubitCatalog: ParameterCatalog = EMPTY_QUBIT_CATALOG;
 	private qubitPairCatalog: QubitPairCatalog = EMPTY_PAIR_CATALOG;
+	private wiringAvailable = false;
+	private wiringFilePath: string | undefined;
 
 	private constructor(
 		panel: vscode.WebviewPanel,
@@ -151,6 +159,8 @@ export class QuamStateEditorPanel {
 		return {
 			qubitCatalog: this.qubitCatalog,
 			qubitPairCatalog: this.qubitPairCatalog,
+			wiringAvailable: this.wiringAvailable,
+			wiringFilePath: this.wiringFilePath,
 		};
 	}
 
@@ -168,6 +178,14 @@ export class QuamStateEditorPanel {
 			this.data = read.data;
 			this.rawBytes = read.rawBytes;
 
+			this.wiringAvailable = await wiringFileExists(this.stateUri);
+			const wiringDocument = this.wiringAvailable
+				? await readWiringFile(this.stateUri)
+				: undefined;
+			this.wiringFilePath = this.wiringAvailable
+				? formatWiringFilePath(this.stateUri, this.workspaceFolder)
+				: undefined;
+
 			this.qubitCatalog =
 				this.data.qubits && typeof this.data.qubits === 'object'
 					? buildParameterCatalog(this.data)
@@ -177,6 +195,15 @@ export class QuamStateEditorPanel {
 				this.data.qubit_pairs && typeof this.data.qubit_pairs === 'object'
 					? buildQubitPairCatalog(this.data)
 					: EMPTY_PAIR_CATALOG;
+
+			if (wiringDocument) {
+				this.qubitCatalog.entries.push(
+					...buildQubitPortCatalogEntries(this.data, wiringDocument)
+				);
+				this.qubitPairCatalog.entries.push(
+					...buildPairPortCatalogEntries(this.data, wiringDocument)
+				);
+			}
 
 			const hasQubits = this.qubitCatalog.qubits.length > 0;
 			const hasPairs = this.qubitPairCatalog.pairs.length > 0;
@@ -235,8 +262,20 @@ export class QuamStateEditorPanel {
 		if (result.ok) {
 			this.data = data;
 			this.rawBytes = rawBytes;
+			this.wiringAvailable = await wiringFileExists(this.stateUri);
+			const wiringDocument = this.wiringAvailable
+				? await readWiringFile(this.stateUri)
+				: undefined;
 			this.qubitCatalog = buildParameterCatalog(this.data);
 			this.qubitPairCatalog = buildQubitPairCatalog(this.data);
+			if (wiringDocument) {
+				this.qubitCatalog.entries.push(
+					...buildQubitPortCatalogEntries(this.data, wiringDocument)
+				);
+				this.qubitPairCatalog.entries.push(
+					...buildPairPortCatalogEntries(this.data, wiringDocument)
+				);
+			}
 			this.postCatalog();
 			this.postMessage({ type: 'applyResult', ok: true, updatedLabels: result.updatedLabels });
 
@@ -300,6 +339,15 @@ export class QuamStateEditorPanel {
 		<div class="radio-row">
 			<label id="location-direct-label"><input type="radio" name="location" value="direct" checked /> General</label>
 			<label id="location-operation-label"><input type="radio" name="location" value="operation" /> Operations</label>
+			<label id="location-port-label"><input type="radio" name="location" value="port" /> Port</label>
+		</div>
+	</section>
+
+	<section class="field hidden" id="port-section">
+		<p id="port-breadcrumb" class="hint"></p>
+		<div id="port-channel-field" class="hidden">
+			<label for="port-channel">Port channel</label>
+			<select id="port-channel" disabled><option value="">—</option></select>
 		</div>
 	</section>
 

@@ -39,6 +39,10 @@ h1 {
 	margin-bottom: 14px;
 }
 
+.hidden {
+	display: none;
+}
+
 .field.hidden {
 	display: none;
 }
@@ -54,6 +58,11 @@ label,
 	margin: 0 0 8px;
 	font-size: 0.85em;
 	color: var(--vscode-descriptionForeground);
+}
+
+#port-breadcrumb {
+	white-space: pre-line;
+	font-family: var(--vscode-editor-font-family);
 }
 
 select {

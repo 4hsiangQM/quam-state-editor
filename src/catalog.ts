@@ -3,7 +3,7 @@ import type { ScannedParameter } from './parameterIndex.js';
 import { scanNumericParameters, scanQubitPairParameters } from './parameterIndex.js';
 import { isNumeric1dArray, isNumeric2dMatrix } from './arrayFields.js';
 
-export type ParameterKind = 'direct' | 'operation' | 'qubitProperty' | 'matrix' | 'array';
+export type ParameterKind = 'direct' | 'operation' | 'qubitProperty' | 'matrix' | 'array' | 'port';
 
 export type CatalogValueKind = 'number' | 'matrix' | 'array';
 
@@ -27,6 +27,10 @@ export interface CatalogEntry {
 	category: string;
 	operation?: string;
 	parameter: string;
+	/** Resolved hardware port label (Port location only). */
+	portPathLabel?: string;
+	/** OPX channel key for Port location (opx_input / opx_output). */
+	opxKey?: 'opx_input' | 'opx_output';
 	byQubit: Record<string, CatalogSlot | null>;
 }
 
@@ -234,6 +238,8 @@ export interface PairCatalogEntry {
 	category: string;
 	operation?: string;
 	parameter: string;
+	portPathLabel?: string;
+	opxKey?: 'opx_input' | 'opx_output';
 	byPair: Record<string, CatalogSlot | null>;
 }
 
@@ -405,6 +411,8 @@ export type ApplyCatalog = ParameterCatalog | QubitPairCatalog;
 export interface EditorCatalogPayload {
 	qubitCatalog: ParameterCatalog;
 	qubitPairCatalog: QubitPairCatalog;
+	wiringAvailable: boolean;
+	wiringFilePath?: string;
 }
 
 export function parseJsonArrayFromSlot(
